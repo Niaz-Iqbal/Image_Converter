@@ -63,7 +63,9 @@ class SettingsScreen extends StatelessWidget {
               'assets/logo.png',
               width: 40,
               height: 40,
-              fit: BoxFit.cover, // Fills the space and removes black corners
+              fit: BoxFit.cover,
+              cacheWidth: 40, // Preload asset
+              cacheHeight: 40,
             ),
           ),
         ),

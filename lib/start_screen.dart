@@ -89,12 +89,14 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(60), // Matches the circle shape
+                    borderRadius: BorderRadius.circular(60),
                     child: Image.asset(
                       'assets/logo.png',
                       width: 120,
                       height: 120,
-                      fit: BoxFit.cover, // Fills the circular container
+                      fit: BoxFit.cover,
+                      cacheWidth: 120, // Preload asset with original size
+                      cacheHeight: 120,
                     ),
                   ),
                 ),

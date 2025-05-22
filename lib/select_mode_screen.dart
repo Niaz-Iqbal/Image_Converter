@@ -1,4 +1,3 @@
-// select_mode_screen.dart
 import 'package:flutter/material.dart';
 import 'multiple_image_processor.dart';
 import 'results_folder_screen.dart';
@@ -32,6 +31,8 @@ class SelectModeScreen extends StatelessWidget {
                 width: 40,
                 height: 40,
                 fit: BoxFit.cover, // Fills the space and removes black corners
+                cacheWidth: 40, // Preload asset
+                cacheHeight: 40,
               ),
             ),
           ),
