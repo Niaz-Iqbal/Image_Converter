@@ -1,3 +1,4 @@
+// results_folder_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
@@ -17,6 +18,8 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
   String _filter = 'all';
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  bool _isSelectionMode = false;
+  Set<String> _selectedFiles = {};
 
   @override
   void initState() {
@@ -25,7 +28,7 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
     _loadFiles();
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300), // Reduced from 800ms
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -44,6 +47,10 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
     final filteredFiles = await compute(_loadFilesIsolate, {'path': resultsDir.path, 'filter': _filter});
     setState(() {
       files = filteredFiles;
+      _selectedFiles.clear();
+      if (_isSelectionMode && filteredFiles.isEmpty) {
+        _isSelectionMode = false;
+      }
     });
   }
 
@@ -120,10 +127,64 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           const SnackBar(content: Text('File deleted')),
         );
       } catch (e) {
+        debugPrint('Error deleting file: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not delete file')),
         );
       }
+    }
+  }
+
+  Future<void> _deleteSelectedFiles() async {
+    if (_selectedFiles.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Selected Files',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete ${_selectedFiles.length} file${_selectedFiles.length > 1 ? 's' : ''}?',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          TextButton(
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      int deletedCount = 0;
+      for (final path in _selectedFiles) {
+        try {
+          final file = File(path);
+          await file.delete();
+          deletedCount++;
+        } catch (e) {
+          debugPrint('Error deleting file $path: $e');
+        }
+      }
+      await _loadFiles();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$deletedCount file${deletedCount > 1 ? 's' : ''} deleted'),
+        ),
+      );
+      setState(() {
+        _isSelectionMode = false;
+        _selectedFiles.clear();
+      });
     }
   }
 
@@ -171,6 +232,7 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
                     const SnackBar(content: Text('File renamed')),
                   );
                 } catch (e) {
+                  debugPrint('Error renaming file: $e');
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Rename failed')),
@@ -194,14 +256,36 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
   }
 
   String _formatFileSize(int bytes) {
-    return '${(bytes / 1024).toStringAsFixed(1)} KB'; // Simplified for speed
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
   }
 
   void _setFilter(String value) {
     setState(() {
       _filter = value;
+      _selectedFiles.clear();
+      _isSelectionMode = false;
     });
     _loadFiles();
+  }
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      _selectedFiles.clear();
+    });
+  }
+
+  void _toggleFileSelection(String filePath) {
+    setState(() {
+      if (_selectedFiles.contains(filePath)) {
+        _selectedFiles.remove(filePath);
+      } else {
+        _selectedFiles.add(filePath);
+      }
+      if (_selectedFiles.isEmpty) {
+        _isSelectionMode = false;
+      }
+    });
   }
 
   Widget _buildFilterChip(String label, String value) {
@@ -229,9 +313,9 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1), // Reduced shadow intensity
-                    blurRadius: 3, // Reduced from 5
-                    offset: const Offset(0, 1), // Reduced from 2
+                    color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
                   ),
                 ]
               : null,
@@ -262,13 +346,13 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
             width: 40,
             height: 40,
             fit: BoxFit.cover,
-            cacheWidth: 40, // Preload asset
+            cacheWidth: 40,
             cacheHeight: 40,
           ),
         ),
-        title: const Text(
-          'Results Folder',
-          style: TextStyle(
+        title: Text(
+          _isSelectionMode ? '${_selectedFiles.length} Selected' : 'Results Folder',
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -285,8 +369,20 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           ),
         ),
         centerTitle: false,
-        elevation: 4, // Reduced from 8
+        elevation: 4,
         shadowColor: Colors.black45,
+        actions: [
+          IconButton(
+            icon: Icon(_isSelectionMode ? Icons.close : Icons.select_all),
+            color: Colors.white,
+            onPressed: _toggleSelectionMode,
+          ),
+          if (_isSelectionMode && _selectedFiles.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.white),
+              onPressed: _deleteSelectedFiles,
+            ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -312,175 +408,193 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: files.length,
-                      itemBuilder: (context, index) {
-                        final file = files[index];
-                        final fileName = file.path.split('/').last;
-                        final fileObj = File(file.path);
-                        final modifiedTime = fileObj.statSync().modified;
-                        final formattedTime = DateFormat('MMM d, yyyy, h:mm a').format(modifiedTime);
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: ListView.builder(
+                        itemCount: files.length,
+                        itemBuilder: (context, index) {
+                          final file = files[index];
+                          final fileName = file.path.split('/').last;
+                          final fileObj = File(file.path);
+                          final modifiedTime = fileObj.statSync().modified;
+                          final formattedTime = DateFormat('MMM d, yyyy, h:mm a').format(modifiedTime);
+                          final isSelected = _selectedFiles.contains(file.path);
 
-                        return Dismissible(
-                          key: Key(file.path),
-                          background: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.blueAccent,
-                              borderRadius: BorderRadius.circular(12),
+                          return Dismissible(
+                            key: Key(file.path),
+                            background: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.blueAccent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.only(left: 20),
+                              child: const Icon(Icons.edit, color: Colors.white),
                             ),
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.only(left: 20),
-                            child: const Icon(Icons.edit, color: Colors.white),
-                          ),
-                          secondaryBackground: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent,
-                              borderRadius: BorderRadius.circular(12),
+                            secondaryBackground: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              child: const Icon(Icons.delete, color: Colors.white),
                             ),
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 20),
-                            child: const Icon(Icons.delete, color: Colors.white),
-                          ),
-                          confirmDismiss: (direction) async {
-                            if (direction == DismissDirection.startToEnd) {
-                              _renameFile(fileObj);
-                              return false;
-                            } else if (direction == DismissDirection.endToStart) {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  title: const Text(
-                                    'Delete File',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
+                            confirmDismiss: _isSelectionMode
+                                ? null
+                                : (direction) async {
+                                    if (direction == DismissDirection.startToEnd) {
+                                      _renameFile(fileObj);
+                                      return false;
+                                    } else if (direction == DismissDirection.endToStart) {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          title: const Text(
+                                            'Delete File',
+                                            style: TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                          content: Text(
+                                            'Are you sure you want to delete "$fileName"?',
+                                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.of(context).pop(false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.of(context).pop(true),
+                                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        await fileObj.delete();
+                                        return true;
+                                      }
+                                    }
+                                    return false;
+                                  },
+                            onDismissed: _isSelectionMode
+                                ? null
+                                : (direction) async {
+                                    setState(() {
+                                      files.removeAt(index);
+                                    });
+                                    await _loadFiles();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('$fileName deleted')),
+                                    );
+                                  },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isDarkMode
+                                      ? [
+                                          theme.colorScheme.surfaceContainerHighest.withOpacity(isSelected ? 0.9 : 0.7),
+                                          theme.colorScheme.surfaceContainerLow.withOpacity(isSelected ? 0.9 : 0.7),
+                                        ]
+                                      : [
+                                          theme.colorScheme.surfaceContainerHighest.withOpacity(isSelected ? 1.0 : 0.9),
+                                          theme.colorScheme.surfaceContainerLow.withOpacity(isSelected ? 1.0 : 0.9),
+                                        ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
                                   ),
-                                  content: Text(
-                                    'Are you sure you want to delete "$fileName"?',
-                                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                ],
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                leading: _isImageFile(file.path)
+                                    ? Image.file(
+                                        fileObj,
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                        cacheWidth: 100,
+                                        cacheHeight: 100,
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black54,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                          Icons.insert_drive_file,
+                                          color: Colors.white,
+                                          size: 30,
+                                        ),
+                                      ),
+                                title: Text(
+                                  fileName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.onSurface,
                                   ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.of(context).pop(false),
-                                      child: const Text('Cancel'),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Size: ${_formatFileSize(fileObj.lengthSync())}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                                      ),
                                     ),
-                                    TextButton(
-                                      onPressed: () => Navigator.of(context).pop(true),
-                                      child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                    Text(
+                                      'Last Edited: $formattedTime',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              );
-                              if (confirm == true) {
-                                await fileObj.delete();
-                                return true;
-                              }
-                            }
-                            return false;
-                          },
-                          onDismissed: (direction) async {
-                            setState(() {
-                              files.removeAt(index);
-                            });
-                            await _loadFiles();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('$fileName deleted')),
-                            );
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: isDarkMode
-                                    ? [
-                                        theme.colorScheme.surfaceContainerHighest.withOpacity(0.7),
-                                        theme.colorScheme.surfaceContainerLow.withOpacity(0.7),
-                                      ]
-                                    : [
-                                        theme.colorScheme.surfaceContainerHighest.withOpacity(0.9),
-                                        theme.colorScheme.surfaceContainerLow.withOpacity(0.9),
-                                      ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1), // Reduced shadow intensity
-                                  blurRadius: 4, // Reduced from 8
-                                  offset: const Offset(0, 2), // Reduced from 4
-                                ),
-                              ],
-                            ),
-                            child: ListTile(
-                              leading: _isImageFile(file.path)
-                                  ? Image.file(
-                                      fileObj,
-                                      width: 50,
-                                      height: 50,
-                                      fit: BoxFit.cover,
-                                      cacheWidth: 100, // Optimize image rendering
-                                      cacheHeight: 100,
-                                    )
-                                  : Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(8),
+                                onTap: _isSelectionMode
+                                    ? () => _toggleFileSelection(file.path)
+                                    : () => _openFile(fileObj),
+                                trailing: _isSelectionMode
+                                    ? Checkbox(
+                                        value: isSelected,
+                                        activeColor: isDarkMode ? Colors.indigoAccent : Colors.deepPurple,
+                                        checkColor: Colors.white,
+                                        onChanged: (value) => _toggleFileSelection(file.path),
+                                      )
+                                    : PopupMenuButton<String>(
+                                        icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
+                                        onSelected: (value) {
+                                          if (value == 'rename') {
+                                            _renameFile(fileObj);
+                                          } else if (value == 'delete') {
+                                            _deleteFile(fileObj);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                                          const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                        ],
                                       ),
-                                      child: const Icon(
-                                        Icons.insert_drive_file,
-                                        color: Colors.white,
-                                        size: 30,
-                                      ),
-                                    ),
-                              title: Text(
-                                fileName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Size: ${_formatFileSize(fileObj.lengthSync())}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                                    ),
-                                  ),
-                                  Text(
-                                    'Last Edited: $formattedTime',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () => _openFile(fileObj),
-                              trailing: PopupMenuButton<String>(
-                                icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
-                                onSelected: (value) {
-                                  if (value == 'rename') {
-                                    _renameFile(fileObj);
-                                  } else if (value == 'delete') {
-                                    _deleteFile(fileObj);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                ],
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
             ),
             Padding(
@@ -499,4 +613,4 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
       ),
     );
   }
-}//original
+}

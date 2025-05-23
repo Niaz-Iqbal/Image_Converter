@@ -4,7 +4,7 @@ import 'results_folder_screen.dart';
 import 'main.dart';
 import 'settings_screen.dart';
 import 'combine_pdfs_screen.dart';
-import 'image_editor_screen.dart'; // Ensure this import exists
+import 'image_editor_screen.dart';
 
 class SelectModeScreen extends StatelessWidget {
   final Function(ThemeMode) onThemeChanged;
@@ -104,10 +104,19 @@ class SelectModeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const HomeScreen()),
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+                          transitionDuration: const Duration(milliseconds: 150),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
                       );
                     },
-                    delay: 200,
+                    delay: 0,
                   ),
                   const SizedBox(height: 24),
                   _buildAnimatedButton(
@@ -118,24 +127,42 @@ class SelectModeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const MultipleImageProcessor()),
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) => const MultipleImageProcessor(),
+                          transitionDuration: const Duration(milliseconds: 150),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
                       );
                     },
-                    delay: 400,
+                    delay: 0,
                   ),
                   const SizedBox(height: 24),
                   _buildAnimatedButton(
                     context: context,
                     icon: Icons.edit,
                     title: 'Edit Image',
-                    subtitle: 'Adjust brightness , Rotate, , Filters',
+                    subtitle: 'Adjust brightness, Rotate, Filters',
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ImageEditorScreen()),
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) => const ImageEditorScreen(),
+                          transitionDuration: const Duration(milliseconds: 150),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
                       );
                     },
-                    delay: 500, // Adjusted delay to fit the sequence
+                    delay: 0,
                   ),
                   const SizedBox(height: 24),
                   _buildAnimatedButton(
@@ -146,10 +173,19 @@ class SelectModeScreen extends StatelessWidget {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const CombinePdfsScreen()),
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) => const CombinePdfsScreen(),
+                          transitionDuration: const Duration(milliseconds: 150),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                        ),
                       );
                     },
-                    delay: 600,
+                    delay: 0,
                   ),
                   const SizedBox(height: 24),
                   _buildAnimatedButton(
@@ -163,7 +199,7 @@ class SelectModeScreen extends StatelessWidget {
                         MaterialPageRoute(builder: (_) => const ResultsFolderScreen()),
                       );
                     },
-                    delay: 800,
+                    delay: 500,
                   ),
                 ],
               ),
@@ -187,10 +223,10 @@ class SelectModeScreen extends StatelessWidget {
 
     return AnimatedOpacity(
       opacity: 1.0,
-      duration: Duration(milliseconds: 600 + delay),
+      duration: Duration(milliseconds: 100 + delay),
       curve: Curves.easeInOut,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 100),
         curve: Curves.easeInOut,
         child: Tooltip(
           message: title,

@@ -442,7 +442,7 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
                           children: [
                             Expanded(
                                 child: _customButton(
-                                    Icons.image, "Pick Image", _pickImage)),
+                                    Icons.image, "Image", _pickImage)),
                             const SizedBox(width: 16),
                             Expanded(
                                 child: _customButton(
