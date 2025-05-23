@@ -11,6 +11,7 @@ import 'results_folder_screen.dart';
 import 'start_screen.dart';
 import 'select_mode_screen.dart';
 import 'package:flutter/foundation.dart'; // For compute
+import 'package:media_scanner/media_scanner.dart'; // Import media_scanner
 
 void main() {
   runApp(const ImageConverterApp());
@@ -205,6 +206,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _isPDF = false;
         _cachedImage = result['image'] as img.Image?;
       });
+      // Scan the new image file to update the gallery
+      await MediaScanner.loadMedia(path: result['path'] as String);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resized image saved to Pictures/ImageConverter')));
     }
   }
@@ -239,6 +242,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _isPDF = false;
         _cachedImage = result['image'] as img.Image?;
       });
+      // Scan the new image file to update the gallery
+      await MediaScanner.loadMedia(path: result['path'] as String);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved as ${_formats[_selectedFormatIndex]} in Pictures/ImageConverter')));
     }
   }
@@ -283,6 +288,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _isPDF = true;
         _cachedImage = null;
       });
+      // Scan the new PDF file (though PDFs may not appear in gallery, this ensures consistency)
+      await MediaScanner.loadMedia(path: result as String);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PDF saved to Documents')));
     }
   }
@@ -335,6 +342,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _isPDF = false;
         _cachedImage = result['image'] as img.Image?;
       });
+      // Scan the new image file to update the gallery
+      await MediaScanner.loadMedia(path: result['path'] as String);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Compressed image saved to Pictures/ImageConverter')));
     }
   }
@@ -512,4 +521,4 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-}//original
+}

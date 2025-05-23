@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:media_scanner/media_scanner.dart'; // Import media_scanner
 
 class MultipleImageProcessor extends StatefulWidget {
   const MultipleImageProcessor({super.key});
@@ -99,6 +100,8 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
       _images[index] = resizedFile;
     });
 
+    // Scan the new image file to update the gallery
+    await MediaScanner.loadMedia(path: newPath);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Resized image $index saved')),
     );
@@ -135,6 +138,8 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
         File('${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}_${index}.$ext');
     await newFile.writeAsBytes(convertedBytes);
 
+    // Scan the new image file to update the gallery
+    await MediaScanner.loadMedia(path: newFile.path);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Image $index saved as $ext')),
     );
@@ -156,6 +161,8 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
         File('${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}_${index}.pdf');
     await file.writeAsBytes(await pdf.save());
 
+    // Scan the new PDF file (though PDFs may not appear in gallery, this ensures consistency)
+    await MediaScanner.loadMedia(path: file.path);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('PDF $index saved')),
     );
@@ -262,4 +269,4 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
       ),
     );
   }
-}//original
+}

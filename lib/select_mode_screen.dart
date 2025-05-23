@@ -3,7 +3,8 @@ import 'multiple_image_processor.dart';
 import 'results_folder_screen.dart';
 import 'main.dart';
 import 'settings_screen.dart';
-import 'combine_pdfs_screen.dart'; // Import the new file
+import 'combine_pdfs_screen.dart';
+import 'image_editor_screen.dart'; // Ensure this import exists
 
 class SelectModeScreen extends StatelessWidget {
   final Function(ThemeMode) onThemeChanged;
@@ -30,8 +31,8 @@ class SelectModeScreen extends StatelessWidget {
                 'assets/logo.png',
                 width: 40,
                 height: 40,
-                fit: BoxFit.cover, // Fills the space and removes black corners
-                cacheWidth: 40, // Preload asset
+                fit: BoxFit.cover,
+                cacheWidth: 40,
                 cacheHeight: 40,
               ),
             ),
@@ -121,6 +122,20 @@ class SelectModeScreen extends StatelessWidget {
                       );
                     },
                     delay: 400,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildAnimatedButton(
+                    context: context,
+                    icon: Icons.edit,
+                    title: 'Edit Image',
+                    subtitle: 'Adjust brightness , Rotate, , Filters',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ImageEditorScreen()),
+                      );
+                    },
+                    delay: 500, // Adjusted delay to fit the sequence
                   ),
                   const SizedBox(height: 24),
                   _buildAnimatedButton(
