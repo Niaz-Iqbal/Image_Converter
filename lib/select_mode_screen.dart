@@ -80,131 +80,128 @@ class SelectModeScreen extends StatelessWidget {
           elevation: 8,
           shadowColor: Colors.black45,
         ),
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDarkMode
-                  ? [Colors.indigo.shade900, Colors.purple.shade900]
-                  : [Colors.indigoAccent, Colors.purpleAccent],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildAnimatedButton(
-                    context: context,
-                    icon: Icons.photo_camera,
-                    title: 'Single Image',
-                    subtitle: 'Create, Resize, Format, Create PDF',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-                          transitionDuration: const Duration(milliseconds: 150),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    delay: 0,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildAnimatedButton(
-                    context: context,
-                    icon: Icons.photo_library,
-                    title: 'Multiple Images',
-                    subtitle: 'Create, Resize, Format, Create PDF',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const MultipleImageProcessor(),
-                          transitionDuration: const Duration(milliseconds: 150),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    delay: 0,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildAnimatedButton(
-                    context: context,
-                    icon: Icons.edit,
-                    title: 'Edit Image',
-                    subtitle: 'Adjust brightness, Rotate, Filters',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const ImageEditorScreen(),
-                          transitionDuration: const Duration(milliseconds: 150),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    delay: 0,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildAnimatedButton(
-                    context: context,
-                    icon: Icons.merge_type,
-                    title: 'Combine PDFs',
-                    subtitle: 'Merge multiple PDFs into one',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const CombinePdfsScreen(),
-                          transitionDuration: const Duration(milliseconds: 150),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    delay: 0,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildAnimatedButton(
-                    context: context,
-                    icon: Icons.folder_open,
-                    title: 'Results Folder',
-                    subtitle: 'View and manage converted files',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ResultsFolderScreen()),
-                      );
-                    },
-                    delay: 500,
-                  ),
-                ],
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 600;
+
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDarkMode
+                      ? [Colors.indigo.shade900, Colors.purple.shade900]
+                      : [Colors.indigoAccent, Colors.purpleAccent],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
-            ),
-          ),
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isWide ? 600 : double.infinity),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildAnimatedButton(
+                          context: context,
+                          icon: Icons.photo_camera,
+                          title: 'Single Image',
+                          subtitle: 'Create, Resize, Format, Create PDF',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+                                transitionDuration: const Duration(milliseconds: 150),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(opacity: animation, child: child);
+                                },
+                              ),
+                            );
+                          },
+                          delay: 0,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildAnimatedButton(
+                          context: context,
+                          icon: Icons.photo_library,
+                          title: 'Multiple Images',
+                          subtitle: 'Create, Resize, Format, Create PDF',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => const MultipleImageProcessor(),
+                                transitionDuration: const Duration(milliseconds: 150),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(opacity: animation, child: child);
+                                },
+                              ),
+                            );
+                          },
+                          delay: 0,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildAnimatedButton(
+                          context: context,
+                          icon: Icons.edit,
+                          title: 'Edit Image',
+                          subtitle: 'Adjust brightness, Rotate, Filters',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => const ImageEditorScreen(),
+                                transitionDuration: const Duration(milliseconds: 150),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(opacity: animation, child: child);
+                                },
+                              ),
+                            );
+                          },
+                          delay: 0,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildAnimatedButton(
+                          context: context,
+                          icon: Icons.merge_type,
+                          title: 'Combine PDFs',
+                          subtitle: 'Merge multiple PDFs into one',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (context, animation, secondaryAnimation) => const CombinePdfsScreen(),
+                                transitionDuration: const Duration(milliseconds: 150),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(opacity: animation, child: child);
+                                },
+                              ),
+                            );
+                          },
+                          delay: 0,
+                        ),
+                        const SizedBox(height: 24),
+                        _buildAnimatedButton(
+                          context: context,
+                          icon: Icons.folder_open,
+                          title: 'Results Folder',
+                          subtitle: 'View and manage converted files',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ResultsFolderScreen()),
+                            );
+                          },
+                          delay: 500,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

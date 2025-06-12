@@ -599,7 +599,7 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
                         ]),
                         const SizedBox(height: 16),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          Expanded(child: _customButton(Icons.swap_horiz, "Change Format", _convertToFormat)),
+                          Expanded(child: _customButton(Icons.swap_horiz, "Change", _convertToFormat)),
                           const SizedBox(width: 16),
                           Expanded(
                             child: SizedBox(
