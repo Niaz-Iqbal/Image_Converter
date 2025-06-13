@@ -54,13 +54,27 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Image.asset(
-            'assets/logo.png',
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-            cacheWidth: 40,
-            cacheHeight: 40,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/logo1.png',
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
         ),
         title: const Text(
@@ -151,45 +165,11 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
       setState(() {
         _originalImageFiles = pickedFiles.map((pickedFile) => File(pickedFile.path)).toList();
         _processedImageFiles = List.from(_originalImageFiles);
-        _preCompressImages();
         _cachedImages.clear();
         _cachedImages.addAll(Map.fromEntries(_originalImageFiles.map((file) => MapEntry(file, null))));
         _isConvertedToPDF = false; // Reset PDF state on new selection
       });
     }
-  }
-
-  Future<void> _preCompressImages() async {
-    if (_originalImageFiles.isEmpty) return;
-    final results = await Future.wait(_originalImageFiles.map((file) async {
-      final bytes = await file.readAsBytes();
-      return await compute(_preCompressImageIsolate, {'bytes': Uint8List.fromList(bytes)});
-    }));
-    final newFiles = results.whereType<Map<String, dynamic>>().map((result) => File(result['path'] as String)).toList();
-    if (newFiles.isNotEmpty) {
-      setState(() {
-        _originalImageFiles = newFiles;
-        _processedImageFiles = List.from(newFiles);
-        _cachedImages.clear();
-        _cachedImages.addAll(Map.fromEntries(newFiles.map((file) => MapEntry(file, null))));
-      });
-      for (final path in newFiles.map((file) => file.path)) {
-        await MediaScanner.loadMedia(path: path);
-      }
-    }
-  }
-
-  static Map<String, dynamic>? _preCompressImageIsolate(Map<String, dynamic> args) {
-    final bytes = args['bytes'] as Uint8List;
-    final original = img.decodeImage(bytes);
-    if (original == null) return null;
-    final resized = img.copyResize(original, width: (original.width / 2).round(), height: (original.height / 2).round());
-    final compressed = img.encodeJpg(resized, quality: 50);
-    final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
-    if (!directory.existsSync()) directory.createSync(recursive: true);
-    final newPath = '${directory.path}/precompressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final file = File(newPath)..writeAsBytesSync(compressed);
-    return {'path': newPath, 'image': resized};
   }
 
   String _getImageExtension(File file) {
@@ -318,7 +298,7 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
     final format = args['format'] as String;
     final original = img.decodeImage(bytes);
     if (original == null) return null;
-    final resized = img.copyResize(original, width: (original.width / 2).round(), height: (original.height / 2).round());
+    final resized = img.copyResize(original, width: original.width, height: original.height);
     final encodedBytes = _encodeImage(resized, format);
     final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
     if (!directory.existsSync()) directory.createSync(recursive: true);
@@ -432,8 +412,7 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
     final quality = args['quality'] as int;
     final original = img.decodeImage(bytes);
     if (original == null) return null;
-    final resized = img.copyResize(original, width: (original.width / 2).round(), height: (original.height / 2).round());
-    final compressed = img.encodeJpg(resized, quality: quality);
+    final compressed = img.encodeJpg(original, quality: quality);
     final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
     if (!directory.existsSync()) directory.createSync(recursive: true);
     final newPath = '${directory.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -484,10 +463,8 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
   String _getImageResolution(File? file) {
     if (file == null) return 'N/A';
     if (_cachedImages[file] == null) {
-      _cachedImages[file] = img.decodeImage(file.readAsBytesSync());
-      if (_cachedImages[file] != null) {
-        _cachedImages[file] = img.copyResize(_cachedImages[file]!, width: (_cachedImages[file]!.width / 2).round(), height: (_cachedImages[file]!.height / 2).round());
-      }
+      final bytes = file.readAsBytesSync();
+      _cachedImages[file] = img.decodeImage(bytes);
     }
     return _cachedImages[file] != null ? '${_cachedImages[file]!.width}x${_cachedImages[file]!.height} px' : 'N/A';
   }
@@ -629,4 +606,4 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
       ),
     );
   }
-}
+}//original

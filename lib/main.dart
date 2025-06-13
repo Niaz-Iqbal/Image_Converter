@@ -90,7 +90,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int _selectedFormatIndex = 0;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  img.Image? _cachedImage; // Cache decoded image to avoid redundant decoding
+  img.Image? _cachedImage; // Cache for original image
+  img.Image? _convertedCachedImage; // Cache for converted image
+  String? _originalResolution; // Store initial resolution of original image
 
   @override
   void initState() {
@@ -129,7 +131,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _imageFile = File(pickedFile.path);
         _originalImageFile = File(pickedFile.path);
         _isPDF = false;
-        _cachedImage = null; // Clear cache on new image
+        _cachedImage = null; // Clear original cache
+        _convertedCachedImage = null; // Clear converted cache
+        _originalResolution = null; // Reset original resolution
+        final bytes = File(pickedFile.path).readAsBytesSync();
+        final decodedImage = img.decodeImage(bytes);
+        if (decodedImage != null) {
+          _cachedImage = decodedImage;
+          _originalResolution = '${decodedImage.width}x${decodedImage.height} px'; // Set initial resolution
+        }
       });
     }
   }
@@ -196,15 +206,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _resizeImage(int width, int height) async {
-    if (_imageFile == null) return;
-    final bytes = await _imageFile!.readAsBytes();
+    if (_originalImageFile == null) return;
+    final bytes = await _originalImageFile!.readAsBytes();
     final result = await compute(_resizeImageIsolate, {'bytes': Uint8List.fromList(bytes), 'width': width, 'height': height});
     if (result != null) {
       final resizedFile = File(result['path'] as String);
       setState(() {
         _imageFile = resizedFile;
         _isPDF = false;
-        _cachedImage = result['image'] as img.Image?;
+        _convertedCachedImage = result['image'] as img.Image?; // Update only converted cache
+        // Keep original cache and resolution intact
       });
       // Scan the new image file to update the gallery
       await MediaScanner.loadMedia(path: result['path'] as String);
@@ -240,11 +251,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       setState(() {
         _imageFile = newFile;
         _isPDF = false;
-        _cachedImage = result['image'] as img.Image?;
+        _convertedCachedImage = result['image'] as img.Image?;
       });
+      // Show specific message based on the selected format
+      final format = _formats[_selectedFormatIndex].toUpperCase();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Converted to $format'),
+        duration: const Duration(seconds: 2),
+      ));
       // Scan the new image file to update the gallery
       await MediaScanner.loadMedia(path: result['path'] as String);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved as ${_formats[_selectedFormatIndex]} in Pictures/ImageConverter')));
     }
   }
 
@@ -286,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       setState(() {
         _imageFile = file;
         _isPDF = true;
-        _cachedImage = null;
+        _convertedCachedImage = null;
       });
       // Scan the new PDF file (though PDFs may not appear in gallery, this ensures consistency)
       await MediaScanner.loadMedia(path: result as String);
@@ -340,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       setState(() {
         _imageFile = compressedFile;
         _isPDF = false;
-        _cachedImage = result['image'] as img.Image?;
+        _convertedCachedImage = result['image'] as img.Image?;
       });
       // Scan the new image file to update the gallery
       await MediaScanner.loadMedia(path: result['path'] as String);
@@ -401,10 +417,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  String _getImageResolution(File? file) {
+  String _getImageResolution(File? file, {bool isOriginal = false}) {
     if (file == null || _isPDF) return 'N/A';
-    if (_cachedImage == null) _cachedImage = img.decodeImage(file.readAsBytesSync());
-    return _cachedImage != null ? '${_cachedImage!.width}x${_cachedImage!.height} px' : 'N/A';
+    if (isOriginal) {
+      return _originalResolution ?? 'N/A'; // Use stored original resolution
+    }
+    final cachedImage = _convertedCachedImage;
+    if (cachedImage == null) {
+      final bytes = file.readAsBytesSync();
+      final decodedImage = img.decodeImage(bytes);
+      if (decodedImage != null) _convertedCachedImage = decodedImage;
+    }
+    return cachedImage != null ? '${cachedImage.width}x${cachedImage.height} px' : 'N/A';
   }
 
   String _getFileSize(File? file) {
@@ -412,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return '${(file.lengthSync() / 1024).toStringAsFixed(1)} KB'; // Simplified for speed
   }
 
-  Widget _buildImagePreview({required File? file, required String label, required bool isPDF}) {
+  Widget _buildImagePreview({required File? file, required String label, required bool isPDF, bool isOriginal = false}) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
     return Column(children: [
@@ -434,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       const SizedBox(height: 8),
       Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
       const SizedBox(height: 4),
-      Text(_getImageResolution(file), style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14)),
+      Text(_getImageResolution(file, isOriginal: isOriginal), style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14)),
       Text(_getFileSize(file), style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14)),
     ]);
   }
@@ -448,7 +472,28 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Image.asset('assets/logo.png', width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 40, cacheHeight: 40), // Preload asset
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/logo1.png',
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
         ),
         title: const Text('Image Converter', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         flexibleSpace: Container(
@@ -480,7 +525,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                     child: Column(children: [
                       Row(children: [
-                        Expanded(child: _buildImagePreview(file: _originalImageFile, label: "Original", isPDF: false)),
+                        Expanded(child: _buildImagePreview(file: _originalImageFile, label: "Original", isPDF: false, isOriginal: true)),
                         const SizedBox(width: 16),
                         Expanded(child: _buildImagePreview(file: _imageFile, label: "Converted", isPDF: _isPDF)),
                       ]),
@@ -521,4 +566,4 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-}//original
+}

@@ -73,30 +73,22 @@ class _StartScreenState extends State<StartScreen> with SingleTickerProviderStat
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: isDarkMode
-                          ? [Colors.grey.shade900, Colors.black54]
-                          : [Colors.white10, Colors.black12],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(isDarkMode ? 0.5 : 0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
+                        color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(60),
                     child: Image.asset(
-                      'assets/logo.png',
+                      'assets/logo1.png',
                       width: 120,
                       height: 120,
                       fit: BoxFit.cover,
-                      cacheWidth: 120, // Preload asset with original size
-                      cacheHeight: 120,
                     ),
                   ),
                 ),

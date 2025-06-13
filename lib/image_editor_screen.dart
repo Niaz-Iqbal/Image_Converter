@@ -1,4 +1,3 @@
-// image_editor_screen.dart
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:async';
@@ -341,13 +340,27 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Image.asset(
-            'assets/logo.png',
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-            cacheWidth: 40,
-            cacheHeight: 40,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/logo1.png',
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
         ),
         title: const Text(
@@ -512,4 +525,4 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
       ),
     );
   }
-}//original
+}
