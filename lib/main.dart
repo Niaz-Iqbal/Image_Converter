@@ -41,12 +41,14 @@ class AdManager {
     interstitialVideoAdPlacementId: false,
     rewardedVideoAdPlacementId: false,
   };
+  static int clickCounter = 0;
+  static const int clicksBeforeAd = 3;
 
   static Future<void> initAds() async {
     if (_isInitialized) return;
     await UnityAds.init(
       gameId: gameId,
-      testMode: false, 
+      testMode: false,
       onComplete: () {
         print('Unity Ads Initialization Complete');
         _isInitialized = true;
@@ -79,26 +81,32 @@ class AdManager {
   }
 
   static void showInterstitialAd() {
-    final placementId = interstitialVideoAdPlacementId;
-    if (_placements[placementId] == true) {
-      _placements[placementId] = false;
-      UnityAds.showVideoAd(
-        placementId: placementId,
-        onComplete: (placementId) {
-          print('Interstitial Ad $placementId completed');
-          _loadAd(placementId);
-        },
-        onFailed: (placementId, error, message) {
-          print('Interstitial Ad $placementId failed: $error $message');
-          _loadAd(placementId);
-        },
-        onStart: (placementId) => print('Interstitial Ad $placementId started'),
-        onClick: (placementId) => print('Interstitial Ad $placementId clicked'),
-        onSkipped: (placementId) {
-          print('Interstitial Ad $placementId skipped');
-          _loadAd(placementId);
-        },
-      );
+    clickCounter++;
+    if (clickCounter >= clicksBeforeAd) {
+      final placementId = interstitialVideoAdPlacementId;
+      if (_placements[placementId] == true) {
+        _placements[placementId] = false;
+        UnityAds.showVideoAd(
+          placementId: placementId,
+          onComplete: (placementId) {
+            print('Interstitial Ad $placementId completed');
+            clickCounter = 0; // Reset counter after ad
+            _loadAd(placementId);
+          },
+          onFailed: (placementId, error, message) {
+            print('Interstitial Ad $placementId failed: $error $message');
+            clickCounter = 0; // Reset counter to allow retry
+            _loadAd(placementId);
+          },
+          onStart: (placementId) => print('Interstitial Ad $placementId started'),
+          onClick: (placementId) => print('Interstitial Ad $placementId clicked'),
+          onSkipped: (placementId) {
+            print('Interstitial Ad $placementId skipped');
+            clickCounter = 0; // Reset counter after skip
+            _loadAd(placementId);
+          },
+        );
+      }
     }
   }
 
@@ -213,7 +221,6 @@ class _HomeScreenState extends State<HomeScreen>
   img.Image? _convertedCachedImage;
   String? _originalResolution;
   bool _isProcessing = false;
-  DateTime? _lastInterstitialTime;
 
   @override
   void initState() {
@@ -271,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen>
                 '${decodedImage.width}x${decodedImage.height} px';
             _isProcessing = false;
           });
+          AdManager.showInterstitialAd(); // Trigger ad check
         } else {
           _showError('Failed to decode image.');
           setState(() {
@@ -286,12 +294,6 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     }
-  }
-
-  bool _canShowInterstitial() {
-    const minInterval = Duration(minutes: 1);
-    if (_lastInterstitialTime == null) return true;
-    return DateTime.now().difference(_lastInterstitialTime!) > minInterval;
   }
 
   String _getImageExtension(File file) {
@@ -398,12 +400,7 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result['path'] as String);
         _showSuccess('Resized image saved to Pictures/ImageConverter');
-        if (_canShowInterstitial()) {
-          AdManager.showInterstitialAd();
-          _lastInterstitialTime = DateTime.now();
-        } else {
-          AdManager.showRewardedAd();
-        }
+        AdManager.showInterstitialAd(); // Trigger ad check
       } else {
         _showError('Failed to resize image.');
       }
@@ -462,12 +459,7 @@ class _HomeScreenState extends State<HomeScreen>
         _showSuccess(
           'Converted to ${_formats[_selectedFormatIndex].toUpperCase()}',
         );
-        if (_canShowInterstitial()) {
-          AdManager.showInterstitialAd();
-          _lastInterstitialTime = DateTime.now();
-        } else {
-          AdManager.showRewardedAd();
-        }
+        AdManager.showInterstitialAd(); // Trigger ad check
       } else {
         _showError('Failed to convert image.');
       }
@@ -535,12 +527,7 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result as String);
         _showSuccess('PDF saved to Documents');
-        if (_canShowInterstitial()) {
-          AdManager.showInterstitialAd();
-          _lastInterstitialTime = DateTime.now();
-        } else {
-          AdManager.showRewardedAd();
-        }
+        AdManager.showInterstitialAd(); // Trigger ad check
       } else {
         _showError('Failed to convert to PDF.');
       }
@@ -652,12 +639,7 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result['path'] as String);
         _showSuccess('Compressed image saved to Pictures/ImageConverter');
-        if (_canShowInterstitial()) {
-          AdManager.showInterstitialAd();
-          _lastInterstitialTime = DateTime.now();
-        } else {
-          AdManager.showRewardedAd();
-        }
+        AdManager.showInterstitialAd(); // Trigger ad check
       } else {
         _showError('Failed to compress image.');
       }
