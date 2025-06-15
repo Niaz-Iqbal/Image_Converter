@@ -10,7 +10,7 @@
 
     <!-- ✅ File provider support -->
     <application
-        android:label="Image Converter"
+        android:label="Pixelette"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">

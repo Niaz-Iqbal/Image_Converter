@@ -224,7 +224,7 @@ class _SelectModeScreenState extends State<SelectModeScreen>
             ),
           ),
           title: const Text(
-            'Pixellete',
+            'Pixelette',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 20,
@@ -288,70 +288,73 @@ class _SelectModeScreenState extends State<SelectModeScreen>
                                 constraints: BoxConstraints(
                                   maxWidth: isWide ? 600 : double.infinity,
                                 ),
-                                child: FadeTransition(
-                                  opacity: _fadeAnimation,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      _buildAnimatedButton(
-                                        icon: Icons.photo_camera,
-                                        title: 'Single Image',
-                                        subtitle:
-                                            'Convert, resize, format, or create PDF',
-                                        onPressed:
-                                            () => _navigateTo(
-                                              HomeScreen(
-                                                onThemeChanged:
-                                                    widget.onThemeChanged,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 50), // Reduced from 100 to 50
+                                  child: FadeTransition(
+                                    opacity: _fadeAnimation,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        _buildAnimatedButton(
+                                          icon: Icons.photo_camera,
+                                          title: 'Single Image',
+                                          subtitle:
+                                              'Convert, resize, format, or create PDF',
+                                          onPressed:
+                                              () => _navigateTo(
+                                                HomeScreen(
+                                                  onThemeChanged:
+                                                      widget.onThemeChanged,
+                                                ),
                                               ),
-                                            ),
-                                        delay: 0,
-                                      ),
-                                      _buildAnimatedButton(
-                                        icon: Icons.photo_library,
-                                        title: 'Multiple Images',
-                                        subtitle:
-                                            'Batch convert, resize, or create PDFs',
-                                        onPressed:
-                                            () => _navigateTo(
-                                              const MultipleImageProcessor(),
-                                            ),
-                                        delay: 100,
-                                      ),
-                                      _buildAnimatedButton(
-                                        icon: Icons.edit,
-                                        title: 'Edit Image',
-                                        subtitle:
-                                            'Adjust brightness, rotate, apply filters',
-                                        onPressed:
-                                            () => _navigateTo(
-                                              const ImageEditorScreen(),
-                                            ),
-                                        delay: 200,
-                                      ),
-                                      _buildAnimatedButton(
-                                        icon: Icons.merge_type,
-                                        title: 'Combine PDFs',
-                                        subtitle:
-                                            'Merge multiple PDFs into one',
-                                        onPressed:
-                                            () => _navigateTo(
-                                              const CombinePdfsScreen(),
-                                            ),
-                                        delay: 300,
-                                      ),
-                                      _buildAnimatedButton(
-                                        icon: Icons.folder_open,
-                                        title: 'Results Folder',
-                                        subtitle:
-                                            'View and manage converted files',
-                                        onPressed:
-                                            () => _navigateTo(
-                                              const ResultsFolderScreen(),
-                                            ),
-                                        delay: 400,
-                                      ),
-                                    ],
+                                          delay: 0,
+                                        ),
+                                        _buildAnimatedButton(
+                                          icon: Icons.photo_library,
+                                          title: 'Multiple Images',
+                                          subtitle:
+                                              'Batch convert, resize, or create PDFs',
+                                          onPressed:
+                                              () => _navigateTo(
+                                                const MultipleImageProcessor(),
+                                              ),
+                                          delay: 100,
+                                        ),
+                                        _buildAnimatedButton(
+                                          icon: Icons.edit,
+                                          title: 'Edit Image',
+                                          subtitle:
+                                              'Adjust brightness, rotate, apply filters',
+                                          onPressed:
+                                              () => _navigateTo(
+                                                const ImageEditorScreen(),
+                                              ),
+                                          delay: 200,
+                                        ),
+                                        _buildAnimatedButton(
+                                          icon: Icons.merge_type,
+                                          title: 'Combine PDFs',
+                                          subtitle:
+                                              'Merge multiple PDFs into one',
+                                          onPressed:
+                                              () => _navigateTo(
+                                                const CombinePdfsScreen(),
+                                              ),
+                                          delay: 300,
+                                        ),
+                                        _buildAnimatedButton(
+                                          icon: Icons.folder_open,
+                                          title: 'Results Folder',
+                                          subtitle:
+                                              'View and manage converted files',
+                                          onPressed:
+                                              () => _navigateTo(
+                                                const ResultsFolderScreen(),
+                                              ),
+                                          delay: 400,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),

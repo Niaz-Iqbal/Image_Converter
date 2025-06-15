@@ -46,7 +46,7 @@ class AdManager {
     if (_isInitialized) return;
     await UnityAds.init(
       gameId: gameId,
-      testMode: true,
+      testMode: false, 
       onComplete: () {
         print('Unity Ads Initialization Complete');
         _isInitialized = true;
@@ -79,7 +79,7 @@ class AdManager {
   }
 
   static void showInterstitialAd() {
-    final placementId = interstitialVideoAdPlacementId; // Removed 'const'
+    final placementId = interstitialVideoAdPlacementId;
     if (_placements[placementId] == true) {
       _placements[placementId] = false;
       UnityAds.showVideoAd(
@@ -103,7 +103,7 @@ class AdManager {
   }
 
   static void showRewardedAd() {
-    final placementId = rewardedVideoAdPlacementId; // Removed 'const'
+    final placementId = rewardedVideoAdPlacementId;
     if (_placements[placementId] == true) {
       _placements[placementId] = false;
       UnityAds.showVideoAd(
@@ -141,7 +141,7 @@ class _ImageConverterAppState extends State<ImageConverterApp> {
   void initState() {
     super.initState();
     _loadTheme();
-    AdManager.initAds(); // Initialize Unity Ads globally
+    AdManager.initAds();
   }
 
   Future<void> _loadTheme() async {
@@ -185,7 +185,8 @@ class _ImageConverterAppState extends State<ImageConverterApp> {
         scaffoldBackgroundColor: Colors.grey[900],
       ),
       themeMode: _themeMode,
-      home: StartScreen(onThemeChanged: _updateTheme),    );
+      home: StartScreen(onThemeChanged: _updateTheme),
+    );
   }
 }
 
@@ -307,77 +308,71 @@ class _HomeScreenState extends State<HomeScreen>
 
     await showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text(
-              "Resize Image",
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: widthController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Width (px)',
-                    filled: true,
-                    fillColor:
-                        Theme.of(context).colorScheme.surfaceContainerLow,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          "Resize Image",
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: widthController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Width (px)',
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: heightController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Height (px)',
-                    filled: true,
-                    fillColor:
-                        Theme.of(context).colorScheme.surfaceContainerLow,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
+            const SizedBox(height: 12),
+            TextField(
+              controller: heightController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Height (px)',
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
-              TextButton(
-                onPressed: () {
-                  width = int.tryParse(widthController.text);
-                  height = int.tryParse(heightController.text);
-                  if (width != null &&
-                      height != null &&
-                      width! > 0 &&
-                      height! > 0) {
-                    Navigator.pop(context);
-                    _resizeImage(width!, height!);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter valid dimensions.'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text("Resize"),
-              ),
-            ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
           ),
+          TextButton(
+            onPressed: () {
+              width = int.tryParse(widthController.text);
+              height = int.tryParse(heightController.text);
+              if (width != null && height != null && width! > 0 && height! > 0) {
+                Navigator.pop(context);
+                _resizeImage(width!, height!);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid dimensions.'),
+                  ),
+                );
+              }
+            },
+            child: const Text("Resize"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -581,61 +576,58 @@ class _HomeScreenState extends State<HomeScreen>
 
     await showDialog(
       context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text(
-                    "Compress Image",
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Adjust quality (lower = smaller file size):",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Slider(
-                        value: quality,
-                        min: 10,
-                        max: 100,
-                        divisions: 90,
-                        label: quality.round().toString(),
-                        activeColor: Theme.of(context).colorScheme.primary,
-                        onChanged: (value) => setState(() => quality = value),
-                      ),
-                      Text(
-                        "Quality: ${quality.round()}%",
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancel"),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _compressImage(quality.round());
-                      },
-                      child: const Text("Compress"),
-                    ),
-                  ],
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          title: const Text(
+            "Compress Image",
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Adjust quality (lower = smaller file size):",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Slider(
+                value: quality,
+                min: 10,
+                max: 100,
+                divisions: 90,
+                label: quality.round().toString(),
+                activeColor: Theme.of(context).colorScheme.primary,
+                onChanged: (value) => setState(() => quality = value),
+              ),
+              Text(
+                "Quality: ${quality.round()}%",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _compressImage(quality.round());
+              },
+              child: const Text("Compress"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -737,6 +729,15 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
+
+    final gradientColors = isPrimary
+        ? isDarkMode
+            ? [Colors.blue.shade700, Colors.blue.shade900]
+            : [Colors.blue.shade400, Colors.blue.shade600]
+        : isDarkMode
+            ? [Colors.indigo.shade800, Colors.purple.shade800]
+            : [Colors.deepPurple.shade400, Colors.indigo.shade400];
+
     return Semantics(
       button: true,
       label: label,
@@ -748,58 +749,34 @@ class _HomeScreenState extends State<HomeScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors:
-                  isPrimary
-                      ? isDarkMode
-                          ? [Colors.indigo.shade700, Colors.blue.shade800]
-                          : [Colors.indigo.shade400, Colors.blue.shade500]
-                      : isDarkMode
-                      ? [Colors.grey.shade800, Colors.grey.shade900]
-                      : [Colors.grey.shade200, Colors.grey.shade300],
+              colors: gradientColors,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(12),
-            boxShadow:
-                isEnabled
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(
-                          isDarkMode ? 0.3 : 0.15,
-                        ),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                    : [],
-            border: Border.all(
-              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-              width: 1,
-            ),
+            boxShadow: isEnabled
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                color:
-                    isEnabled
-                        ? (isPrimary
-                            ? Colors.white
-                            : theme.colorScheme.onSurface)
-                        : Colors.grey,
+                color: isEnabled ? Colors.white : Colors.grey,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color:
-                      isEnabled
-                          ? (isPrimary
-                              ? Colors.white
-                              : theme.colorScheme.onSurface)
-                          : Colors.grey,
+                  color: isEnabled ? Colors.white : Colors.grey,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -814,61 +791,52 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _formatChip(String format, bool isSelected) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
+
     return Semantics(
       selected: isSelected,
       label: 'Format $format',
       child: GestureDetector(
-        onTap:
-            _isProcessing
-                ? null
-                : () {
-                  if (mounted) {
-                    setState(
-                      () => _selectedFormatIndex = _formats.indexOf(format),
-                    );
-                  }
-                },
+        onTap: _isProcessing
+            ? null
+            : () {
+                if (mounted) {
+                  setState(() => _selectedFormatIndex = _formats.indexOf(format));
+                }
+              },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            gradient:
-                isSelected
-                    ? LinearGradient(
-                      colors:
-                          isDarkMode
-                              ? [Colors.indigo.shade700, Colors.blue.shade800]
-                              : [Colors.indigo.shade400, Colors.blue.shade500],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                    : null,
-            color:
-                isSelected
-                    ? null
-                    : (isDarkMode
-                        ? Colors.grey.shade800
-                        : Colors.grey.shade200),
+            gradient: isSelected
+                ? LinearGradient(
+                    colors: isDarkMode
+                        ? [Colors.blue.shade700, Colors.blue.shade900]
+                        : [Colors.blue.shade400, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isSelected
+                ? null
+                : (isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
             borderRadius: BorderRadius.circular(20),
-            boxShadow:
-                isSelected
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                    : [],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
           ),
           child: Text(
             format.toUpperCase(),
             style: TextStyle(
-              color:
-                  isSelected
-                      ? Colors.white
-                      : (isDarkMode ? Colors.white70 : Colors.black87),
+              color: isSelected
+                  ? Colors.white
+                  : (isDarkMode ? Colors.white70 : Colors.black87),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -932,36 +900,35 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child:
-                  file != null && file.existsSync()
-                      ? isPDF
-                          ? const Center(
-                            child: Icon(
-                              Icons.picture_as_pdf,
-                              size: 40,
-                              color: Colors.grey,
+              child: file != null && file.existsSync()
+                  ? isPDF
+                      ? const Center(
+                          child: Icon(
+                            Icons.picture_as_pdf,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : Image.file(
+                          file,
+                          fit: BoxFit.contain,
+                          height: 180,
+                          width: double.infinity,
+                          cacheHeight: 360,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Center(
+                            child: Text(
+                              'Error loading image',
+                              style: TextStyle(color: Colors.red),
                             ),
-                          )
-                          : Image.file(
-                            file,
-                            fit: BoxFit.contain,
-                            height: 180,
-                            width: double.infinity,
-                            cacheHeight: 360,
-                            errorBuilder:
-                                (context, error, stackTrace) => const Center(
-                                  child: Text(
-                                    'Error loading image',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                          )
-                      : const Center(
-                        child: Text(
-                          'No Image',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
+                          ),
+                        )
+                  : const Center(
+                      child: Text(
+                        'No Image',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
+                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -1002,10 +969,9 @@ class _HomeScreenState extends State<HomeScreen>
           padding: const EdgeInsets.all(8.0),
           child: Container(
             decoration: BoxDecoration(
-              color:
-                  isDarkMode
-                      ? Colors.black.withOpacity(0.4)
-                      : Colors.white.withOpacity(0.9),
+              color: isDarkMode
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.9),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -1037,10 +1003,9 @@ class _HomeScreenState extends State<HomeScreen>
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors:
-                  isDarkMode
-                      ? [Colors.indigo.shade800, Colors.blue.shade900]
-                      : [Colors.indigo.shade400, Colors.blue.shade500],
+              colors: isDarkMode
+                  ? [Colors.indigo.shade800, Colors.blue.shade900]
+                  : [Colors.indigo.shade400, Colors.blue.shade500],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -1054,10 +1019,9 @@ class _HomeScreenState extends State<HomeScreen>
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors:
-                    isDarkMode
-                        ? [Colors.indigo.shade900, Colors.grey.shade900]
-                        : [Colors.indigo.shade50, Colors.grey.shade50],
+                colors: isDarkMode
+                    ? [Colors.indigo.shade900, Colors.grey.shade900]
+                    : [Colors.indigo.shade50, Colors.grey.shade50],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -1075,16 +1039,14 @@ class _HomeScreenState extends State<HomeScreen>
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color:
-                                isDarkMode
-                                    ? Colors.grey.shade900.withOpacity(0.85)
-                                    : Colors.white.withOpacity(0.95),
+                            color: isDarkMode
+                                ? Colors.grey.shade900.withOpacity(0.85)
+                                : Colors.white.withOpacity(0.95),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(
-                                  isDarkMode ? 0.2 : 0.1,
-                                ),
+                                    isDarkMode ? 0.2 : 0.1),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                                 offset: const Offset(0, 4),
@@ -1116,8 +1078,7 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               const SizedBox(height: 20),
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceEvenly,
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                 children: [
                                   Expanded(
                                     child: _customButton(
@@ -1166,11 +1127,11 @@ class _HomeScreenState extends State<HomeScreen>
                                       child: ListView.builder(
                                         scrollDirection: Axis.horizontal,
                                         itemCount: _formats.length,
-                                        itemBuilder:
-                                            (context, index) => _formatChip(
-                                              _formats[index],
-                                              index == _selectedFormatIndex,
-                                            ),
+                                        itemBuilder: (context, index) =>
+                                            _formatChip(
+                                          _formats[index],
+                                          index == _selectedFormatIndex,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1214,13 +1175,10 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     UnityBannerAd(
                       placementId: AdManager.bannerAdPlacementId,
-                      onLoad:
-                          (placementId) => print('Banner loaded: $placementId'),
-                      onClick:
-                          (placementId) =>
-                              print('Banner clicked: $placementId'),
-                      onShown:
-                          (placementId) => print('Banner shown: $placementId'),
+                      onLoad: (placementId) => print('Banner loaded: $placementId'),
+                      onClick: (placementId) =>
+                          print('Banner clicked: $placementId'),
+                      onShown: (placementId) => print('Banner shown: $placementId'),
                       onFailed: (placementId, error, message) {
                         print('Banner Ad $placementId failed: $error $message');
                       },

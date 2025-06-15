@@ -132,77 +132,71 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
 
     await showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text(
-              "Resize Images",
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: widthController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Width (px)',
-                    filled: true,
-                    fillColor:
-                        Theme.of(context).colorScheme.surfaceContainerLow,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          "Resize Images",
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: widthController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Width (px)',
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: heightController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Height (px)',
-                    filled: true,
-                    fillColor:
-                        Theme.of(context).colorScheme.surfaceContainerLow,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
+            const SizedBox(height: 12),
+            TextField(
+              controller: heightController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Height (px)',
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
-              TextButton(
-                onPressed: () {
-                  width = int.tryParse(widthController.text);
-                  height = int.tryParse(heightController.text);
-                  if (width != null &&
-                      height != null &&
-                      width! > 0 &&
-                      height! > 0) {
-                    Navigator.pop(context);
-                    _resizeImages(width!, height!);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter valid dimensions.'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text("Resize"),
-              ),
-            ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
           ),
+          TextButton(
+            onPressed: () {
+              width = int.tryParse(widthController.text);
+              height = int.tryParse(heightController.text);
+              if (width != null && height != null && width! > 0 && height! > 0) {
+                Navigator.pop(context);
+                _resizeImages(width!, height!);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid dimensions.'),
+                  ),
+                );
+              }
+            },
+            child: const Text("Resize"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -213,22 +207,19 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     });
     try {
       final results = await Future.wait(
-        _originalImageFiles
-            .map((file) async {
-              final bytes = await file.readAsBytes();
-              return await compute(_resizeImageIsolate, {
-                'bytes': Uint8List.fromList(bytes),
-                'width': width,
-                'height': height,
-              });
-            })
-            .take(5),
+        _originalImageFiles.map((file) async {
+          final bytes = await file.readAsBytes();
+          return await compute(_resizeImageIsolate, {
+            'bytes': Uint8List.fromList(bytes),
+            'width': width,
+            'height': height,
+          });
+        }).take(5),
       );
-      final newFiles =
-          results
-              .whereType<Map<String, dynamic>>()
-              .map((result) => File(result['path'] as String))
-              .toList();
+      final newFiles = results
+          .whereType<Map<String, dynamic>>()
+          .map((result) => File(result['path'] as String))
+          .toList();
       if (newFiles.isNotEmpty && mounted) {
         setState(() {
           _processedImageFiles = newFiles;
@@ -287,21 +278,18 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     });
     try {
       final results = await Future.wait(
-        _originalImageFiles
-            .map((file) async {
-              final bytes = await file.readAsBytes();
-              return await compute(_convertToFormatIsolate, {
-                'bytes': Uint8List.fromList(bytes),
-                'format': _formats[_selectedFormatIndex],
-              });
-            })
-            .take(5),
+        _originalImageFiles.map((file) async {
+          final bytes = await file.readAsBytes();
+          return await compute(_convertToFormatIsolate, {
+            'bytes': Uint8List.fromList(bytes),
+            'format': _formats[_selectedFormatIndex],
+          });
+        }).take(5),
       );
-      final newFiles =
-          results
-              .whereType<Map<String, dynamic>>()
-              .map((result) => File(result['path'] as String))
-              .toList();
+      final newFiles = results
+          .whereType<Map<String, dynamic>>()
+          .map((result) => File(result['path'] as String))
+          .toList();
       if (newFiles.isNotEmpty && mounted) {
         setState(() {
           _processedImageFiles = newFiles;
@@ -373,15 +361,13 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     });
     try {
       final results = await Future.wait(
-        _originalImageFiles
-            .map((file) async {
-              final bytes = await file.readAsBytes();
-              return await compute(
-                _convertToPDFIsolate,
-                Uint8List.fromList(bytes),
-              );
-            })
-            .take(5),
+        _originalImageFiles.map((file) async {
+          final bytes = await file.readAsBytes();
+          return await compute(
+            _convertToPDFIsolate,
+            Uint8List.fromList(bytes),
+          );
+        }).take(5),
       );
       final newFiles =
           results.whereType<String>().map((path) => File(path)).toList();
@@ -417,9 +403,8 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     final image = pw.MemoryImage(bytes);
     pdf.addPage(
       pw.Page(
-        build:
-            (pw.Context context) =>
-                pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain)),
+        build: (pw.Context context) =>
+            pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain)),
       ),
     );
     final directory = Directory('/storage/emulated/0/Documents');
@@ -437,61 +422,58 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
 
     await showDialog(
       context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainer,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text(
-                    "Compress Images",
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "Adjust quality (lower = smaller file size):",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Slider(
-                        value: quality,
-                        min: 10,
-                        max: 100,
-                        divisions: 90,
-                        label: quality.round().toString(),
-                        activeColor: Theme.of(context).colorScheme.primary,
-                        onChanged: (value) => setState(() => quality = value),
-                      ),
-                      Text(
-                        "Quality: ${quality.round()}%",
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Cancel"),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _compressImages(quality.round());
-                      },
-                      child: const Text("Compress"),
-                    ),
-                  ],
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          title: const Text(
+            "Compress Images",
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Adjust quality (lower = smaller file size):",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Slider(
+                value: quality,
+                min: 10,
+                max: 100,
+                divisions: 90,
+                label: quality.round().toString(),
+                activeColor: Theme.of(context).colorScheme.primary,
+                onChanged: (value) => setState(() => quality = value),
+              ),
+              Text(
+                "Quality: ${quality.round()}%",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _compressImages(quality.round());
+              },
+              child: const Text("Compress"),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -502,21 +484,18 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     });
     try {
       final results = await Future.wait(
-        _originalImageFiles
-            .map((file) async {
-              final bytes = await file.readAsBytes();
-              return await compute(_compressImageIsolate, {
-                'bytes': Uint8List.fromList(bytes),
-                'quality': quality,
-              });
-            })
-            .take(5),
+        _originalImageFiles.map((file) async {
+          final bytes = await file.readAsBytes();
+          return await compute(_compressImageIsolate, {
+            'bytes': Uint8List.fromList(bytes),
+            'quality': quality,
+          });
+        }).take(5),
       );
-      final newFiles =
-          results
-              .whereType<Map<String, dynamic>>()
-              .map((result) => File(result['path'] as String))
-              .toList();
+      final newFiles = results
+          .whereType<Map<String, dynamic>>()
+          .map((result) => File(result['path'] as String))
+          .toList();
       if (newFiles.isNotEmpty && mounted) {
         setState(() {
           _processedImageFiles = newFiles;
@@ -595,7 +574,7 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     }
   }
 
- Widget _customButton(
+  Widget _customButton(
     IconData icon,
     String label,
     VoidCallback onPressed, {
@@ -606,73 +585,65 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
     final isDarkMode = theme.brightness == Brightness.dark;
     // Make button primary if clicked or in _primaryButtons
     final effectiveIsPrimary =
-        isPrimary ||
-        _clickedButtons.contains(label) ||
-        _primaryButtons.contains(label);
+        isPrimary || _clickedButtons.contains(label) || _primaryButtons.contains(label);
+
     return Semantics(
       button: true,
       label: label,
       enabled: isEnabled,
       child: GestureDetector(
-        onTap:
-            isEnabled
-                ? () {
-                  setState(() {
-                    _clickedButtons.add(label);
-                  });
-                  onPressed();
-                }
-                : null,
+        onTap: isEnabled
+            ? () {
+                setState(() {
+                  _clickedButtons.add(label);
+                });
+                onPressed();
+              }
+            : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors:
-                  isEnabled
-                      ? effectiveIsPrimary
-                          ? isDarkMode
-                              ? [Colors.blue.shade700, Colors.blue.shade900]
-                              : [Colors.blue.shade400, Colors.blue.shade600]
-                          : isDarkMode
+              colors: isEnabled
+                  ? effectiveIsPrimary
+                      ? isDarkMode
+                          ? [Colors.blue.shade700, Colors.blue.shade900]
+                          : [Colors.blue.shade400, Colors.blue.shade600]
+                      : isDarkMode
                           ? [Colors.indigo.shade800, Colors.purple.shade800]
                           : [Colors.deepPurple.shade400, Colors.indigo.shade400]
-                      : [Colors.grey.shade200, Colors.grey.shade300],
+                  : isDarkMode
+                      ? [Colors.grey.shade600, Colors.grey.shade700]
+                      : [Colors.grey.shade400, Colors.grey.shade500],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(12),
-            boxShadow:
-                isEnabled
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(
-                          isDarkMode ? 0.3 : 0.15,
-                        ),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                    : [],
-            border: Border.all(
-              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-              width: 1,
-            ),
+            boxShadow: isEnabled
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                color: isEnabled ? Colors.white : Colors.grey.shade600,
+                color: isEnabled ? Colors.white : Colors.grey,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: isEnabled ? Colors.white : Colors.grey.shade600,
+                  color: isEnabled ? Colors.white : Colors.grey,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -683,67 +654,61 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
       ),
     );
   }
+
   Widget _formatChip(String format, bool isSelected) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
+
     return Semantics(
       selected: isSelected,
       label: 'Format $format',
       enabled: !_isProcessing && _originalImageFiles.isNotEmpty,
       child: GestureDetector(
-        onTap:
-            _isProcessing || _originalImageFiles.isEmpty
-                ? null
-                : () {
-                  if (mounted) {
-                    setState(
-                      () => _selectedFormatIndex = _formats.indexOf(format),
-                    );
-                  }
-                },
+        onTap: _isProcessing || _originalImageFiles.isEmpty
+            ? null
+            : () {
+                if (mounted) {
+                  setState(() => _selectedFormatIndex = _formats.indexOf(format));
+                }
+              },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.symmetric(horizontal: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            gradient:
-                isSelected
-                    ? LinearGradient(
-                      colors:
-                          isDarkMode
-                              ? [Colors.blue.shade700, Colors.blue.shade900]
-                              : [Colors.blue.shade400, Colors.blue.shade600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                    : null,
-            color:
-                isSelected
-                    ? null
-                    : isDarkMode
-                    ? Colors.indigo.shade800
-                    : Colors.deepPurple.shade400,
+            gradient: isSelected
+                ? LinearGradient(
+                    colors: isDarkMode
+                        ? [Colors.blue.shade700, Colors.blue.shade900]
+                        : [Colors.blue.shade400, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isSelected
+                ? null
+                : isDarkMode
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(20),
-            boxShadow:
-                isSelected
-                    ? [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                    : [],
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
           ),
           child: Text(
             format.toUpperCase(),
             style: TextStyle(
-              color:
-                  isSelected
-                      ? Colors.white
-                      : isDarkMode
+              color: isSelected
+                  ? Colors.white
+                  : isDarkMode
                       ? Colors.white70
-                      : Colors.white,
+                      : Colors.black87,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -799,35 +764,34 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child:
-                  file != null && file.existsSync()
-                      ? isPDF
-                          ? const Center(
-                            child: Icon(
-                              Icons.picture_as_pdf,
-                              size: 40,
-                              color: Colors.grey,
+              child: file != null && file.existsSync()
+                  ? isPDF
+                      ? const Center(
+                          child: Icon(
+                            Icons.picture_as_pdf,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : Image.file(
+                          file,
+                          fit: BoxFit.contain,
+                          height: 180,
+                          cacheHeight: 360,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Center(
+                            child: Text(
+                              'Error loading image',
+                              style: TextStyle(color: Colors.red),
                             ),
-                          )
-                          : Image.file(
-                            file,
-                            fit: BoxFit.contain,
-                            height: 180,
-                            cacheHeight: 360,
-                            errorBuilder:
-                                (context, error, stackTrace) => const Center(
-                                  child: Text(
-                                    'Error loading image',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                          )
-                      : const Center(
-                        child: Text(
-                          'No Image',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
+                          ),
+                        )
+                  : const Center(
+                      child: Text(
+                        'No Image',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
+                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -870,10 +834,9 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
           padding: const EdgeInsets.all(8.0),
           child: Container(
             decoration: BoxDecoration(
-              color:
-                  isDarkMode
-                      ? Colors.black.withOpacity(0.4)
-                      : Colors.white.withOpacity(0.9),
+              color: isDarkMode
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.9),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -905,10 +868,9 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors:
-                  isDarkMode
-                      ? [Colors.blue.shade800, Colors.blue.shade900]
-                      : [Colors.blue.shade400, Colors.blue.shade600],
+              colors: isDarkMode
+                  ? [Colors.blue.shade800, Colors.blue.shade900]
+                  : [Colors.blue.shade400, Colors.blue.shade600],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -922,10 +884,9 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors:
-                    isDarkMode
-                        ? [Colors.indigo.shade900, Colors.purple.shade900]
-                        : [Colors.deepPurple.shade50, Colors.indigo.shade50],
+                colors: isDarkMode
+                    ? [Colors.indigo.shade900, Colors.purple.shade900]
+                    : [Colors.deepPurple.shade50, Colors.indigo.shade50],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -938,16 +899,13 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color:
-                          isDarkMode
-                              ? Colors.indigo.shade900.withOpacity(0.85)
-                              : Colors.white.withOpacity(0.95),
+                      color: isDarkMode
+                          ? Colors.grey.shade900.withOpacity(0.85) // Match HomeScreen dark mode
+                          : Colors.white.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(
-                            isDarkMode ? 0.2 : 0.1,
-                          ),
+                          color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
                           blurRadius: 12,
                           spreadRadius: 2,
                           offset: const Offset(0, 4),
@@ -978,10 +936,9 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
                             children: [
                               Expanded(
                                 child: _buildImagePreview(
-                                  file:
-                                      _originalImageFiles.isNotEmpty
-                                          ? _originalImageFiles[0]
-                                          : null,
+                                  file: _originalImageFiles.isNotEmpty
+                                      ? _originalImageFiles[0]
+                                      : null,
                                   label: "Original",
                                   isPDF: false,
                                 ),
@@ -989,10 +946,9 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _buildImagePreview(
-                                  file:
-                                      _processedImageFiles.isNotEmpty
-                                          ? _processedImageFiles[0]
-                                          : null,
+                                  file: _processedImageFiles.isNotEmpty
+                                      ? _processedImageFiles[0]
+                                      : null,
                                   label: "Converted",
                                   isPDF: _isConvertedToPDF,
                                 ),
@@ -1050,11 +1006,10 @@ class _MultipleImageProcessorState extends State<MultipleImageProcessor>
                                 child: ListView.builder(
                                   scrollDirection: Axis.horizontal,
                                   itemCount: _formats.length,
-                                  itemBuilder:
-                                      (context, index) => _formatChip(
-                                        _formats[index],
-                                        index == _selectedFormatIndex,
-                                      ),
+                                  itemBuilder: (context, index) => _formatChip(
+                                    _formats[index],
+                                    index == _selectedFormatIndex,
+                                  ),
                                 ),
                               ),
                             ),

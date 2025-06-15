@@ -382,6 +382,17 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen>
     return '${kb.toStringAsFixed(1)} KB';
   }
 
+  String _getFileSize(File file) {
+    try {
+      if (file.existsSync()) {
+        return _formatFileSize(file.lengthSync());
+      }
+      return 'N/A';
+    } catch (e) {
+      return 'Error';
+    }
+  }
+
   void _setFilter(String value) {
     if (_filter != value && mounted) {
       setState(() {
@@ -798,7 +809,16 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen>
                                         },
                                   onDismissed: _isMultiSelectMode
                                       ? null
-                                      : (direction) => _loadFiles(),
+                                      : (direction) {
+                                          // Immediately remove the dismissed file from the list
+                                          final updatedFiles = List<File>.from(
+                                              _filteredFilesNotifier.value);
+                                          updatedFiles.removeAt(index);
+                                          _filteredFilesNotifier.value =
+                                              updatedFiles;
+                                          // Optionally refresh the full list asynchronously
+                                          _loadFiles();
+                                        },
                                   child: GestureDetector(
                                     onTap: () => _openFile(file),
                                     onLongPress: () {
@@ -885,7 +905,7 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen>
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                         subtitle: Text(
-                                          'Size: ${_formatFileSize(file.lengthSync())} • $formattedTime',
+                                          'Size: ${_getFileSize(file)} • $formattedTime',
                                           style: const TextStyle(fontSize: 12),
                                         ),
                                         trailing: _isMultiSelectMode

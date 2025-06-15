@@ -374,9 +374,9 @@ class _CombinePdfsScreenState extends State<CombinePdfsScreen>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(
-            horizontal: 20,
+            horizontal: 16, // Reduced horizontal padding to prevent overflow
             vertical: 14,
-          ), // Increased padding
+          ),
           margin: const EdgeInsets.symmetric(vertical: 4),
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -417,15 +417,15 @@ class _CombinePdfsScreenState extends State<CombinePdfsScreen>
               Icon(
                 icon,
                 color: isEnabled ? Colors.white : Colors.grey.shade600,
-                size: 20, // Slightly larger icon
+                size: 20,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
                   color: isEnabled ? Colors.white : Colors.grey.shade600,
-                  fontSize: 16, // Larger font size
-                  fontWeight: FontWeight.w700, // Bolder text
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -540,83 +540,52 @@ class _CombinePdfsScreenState extends State<CombinePdfsScreen>
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors:
-                    isDarkMode
-                        ? [Colors.indigo.shade900, Colors.purple.shade900]
-                        : [Colors.deepPurple.shade50, Colors.indigo.shade50],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            child: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color:
-                          isDarkMode
-                              ? Colors.indigo.shade900.withOpacity(0.85)
-                              : Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(
-                            isDarkMode ? 0.2 : 0.1,
-                          ),
-                          blurRadius: 12,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors:
+                isDarkMode
+                    ? [Colors.indigo.shade900, Colors.purple.shade900]
+                    : [Colors.deepPurple.shade50, Colors.indigo.shade50],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (_selectedPdfs.isEmpty)
                           _buildEmptyState()
                         else
-                          SizedBox(
-                            height: 400,
+                          Expanded(
                             child: ReorderableListView(
                               onReorder: (oldIndex, newIndex) {
                                 if (mounted) {
                                   setState(() {
                                     if (newIndex > oldIndex) newIndex--;
-                                    final item = _selectedPdfs.removeAt(
-                                      oldIndex,
-                                    );
+                                    final item = _selectedPdfs.removeAt(oldIndex);
                                     _selectedPdfs.insert(newIndex, item);
                                     _initializeStaggeredAnimations();
                                   });
                                 }
                               },
-                              children:
-                                  List.generate(
-                                        _selectedPdfs.length,
-                                        (index) => _buildPdfCard(
-                                          _selectedPdfs[index],
-                                          index,
-                                        ),
-                                      )
-                                      .asMap()
-                                      .entries
-                                      .map(
-                                        (entry) => KeyedSubtree(
-                                          key: ValueKey(
-                                            _selectedPdfs[entry.key].path,
-                                          ),
-                                          child: entry.value,
-                                        ),
-                                      )
-                                      .toList(),
+                              children: List.generate(
+                                _selectedPdfs.length,
+                                (index) => _buildPdfCard(_selectedPdfs[index], index),
+                              ).asMap().entries.map(
+                                (entry) => KeyedSubtree(
+                                  key: ValueKey(_selectedPdfs[entry.key].path),
+                                  child: entry.value,
+                                ),
+                              ).toList(),
                             ),
                           ),
                         const SizedBox(height: 20),
@@ -624,21 +593,26 @@ class _CombinePdfsScreenState extends State<CombinePdfsScreen>
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             Expanded(
-                              child: _customButton(
-                                Icons.add,
-                                'Select PDFs',
-                                _pickPdfs,
-                                isEnabled: !_isProcessing,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 4), // Reduced padding
+                                child: _customButton(
+                                  Icons.add,
+                                  'Select PDFs',
+                                  _pickPdfs,
+                                  isEnabled: !_isProcessing,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 8), // Reduced spacing
                             Expanded(
-                              child: _customButton(
-                                Icons.merge_type,
-                                'Combine',
-                                _combinePdfs,
-                                isEnabled:
-                                    !_isProcessing && _selectedPdfs.isNotEmpty,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4), // Reduced padding
+                                child: _customButton(
+                                  Icons.merge_type,
+                                  'Combine',
+                                  _combinePdfs,
+                                  isEnabled: !_isProcessing && _selectedPdfs.isNotEmpty,
+                                ),
                               ),
                             ),
                           ],
@@ -648,33 +622,32 @@ class _CombinePdfsScreenState extends State<CombinePdfsScreen>
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-          if (_isProcessing)
-            Container(
-              color: Colors.black.withOpacity(0.5),
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Processing...',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
+      floatingActionButton: _isProcessing
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Processing...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 }
