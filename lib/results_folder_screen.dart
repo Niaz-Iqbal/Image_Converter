@@ -12,7 +12,8 @@ class ResultsFolderScreen extends StatefulWidget {
   State<ResultsFolderScreen> createState() => _ResultsFolderScreenState();
 }
 
-class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTickerProviderStateMixin {
+class _ResultsFolderScreenState extends State<ResultsFolderScreen>
+    with SingleTickerProviderStateMixin {
   static const _imageDirPath = '/storage/emulated/0/Pictures/ImageConverter';
   static const _pdfDirPath = '/storage/emulated/0/Documents';
   late Directory _imageDir;
@@ -25,22 +26,24 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
   Timer? _debounceTimer;
   bool _isMultiSelectMode = false;
   Set<String> _selectedFiles = {};
+  bool _isLoading = true;
+  bool _isFiltering = false;
+  List<Animation<double>> _staggeredAnimations = [];
 
   @override
   void initState() {
     super.initState();
     _imageDir = Directory(_imageDirPath);
     _pdfDir = Directory(_pdfDirPath);
-    _loadFiles();
-
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+    _loadFiles();
   }
 
   @override
@@ -52,62 +55,101 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
     super.dispose();
   }
 
-  void _debounce(VoidCallback callback, {Duration duration = const Duration(milliseconds: 300)}) {
+  void _debounce(
+    VoidCallback callback, {
+    Duration duration = const Duration(milliseconds: 300),
+  }) {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(duration, callback);
   }
 
   Future<void> _loadFiles() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+    });
     _debounce(() async {
       final List<File> files = [];
-
-      if (await _imageDir.exists()) {
-        await for (final entity in _imageDir.list(recursive: false)) {
-          if (entity is File) {
-            final path = entity.path.toLowerCase();
-            if (path.endsWith('.jpg') ||
-                path.endsWith('.jpeg') ||
-                path.endsWith('.png') ||
-                path.endsWith('.bmp') ||
-                path.endsWith('.gif')) {
+      try {
+        if (await _imageDir.exists()) {
+          await for (final entity in _imageDir.list(recursive: false)) {
+            if (entity is File) {
+              final path = entity.path.toLowerCase();
+              if (path.endsWith('.jpg') ||
+                  path.endsWith('.jpeg') ||
+                  path.endsWith('.png') ||
+                  path.endsWith('.bmp') ||
+                  path.endsWith('.gif')) {
+                files.add(entity);
+              }
+            }
+          }
+        }
+        if (await _pdfDir.exists()) {
+          await for (final entity in _pdfDir.list(recursive: false)) {
+            if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
               files.add(entity);
             }
           }
         }
-      }
-
-      if (await _pdfDir.exists()) {
-        await for (final entity in _pdfDir.list(recursive: false)) {
-          if (entity is File && entity.path.toLowerCase().endsWith('.pdf')) {
-            files.add(entity);
-          }
+        files.sort(
+          (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error loading files: $e')));
         }
       }
-
-      files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
-
       if (mounted) {
         _allFilesNotifier.value = files;
-        _applyFilter();
+        await _applyFilter();
+        _initializeStaggeredAnimations();
+        setState(() {
+          _isLoading = false;
+        });
       }
     });
   }
 
+  void _initializeStaggeredAnimations() {
+    _staggeredAnimations.clear();
+    for (int i = 0; i < _filteredFilesNotifier.value.length; i++) {
+      final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Interval(i * 0.1, 1.0, curve: Curves.easeOutCubic),
+        ),
+      );
+      _staggeredAnimations.add(animation);
+    }
+    _animationController.forward(from: 0.0);
+  }
+
   Future<void> _applyFilter() async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isFiltering = true;
+    });
+
     final filteredFiles = await compute(_filterFiles, {
       'files': _allFilesNotifier.value,
       'filter': _filter,
     });
 
     if (mounted) {
-      _filteredFilesNotifier.value = filteredFiles;
+      setState(() {
+        _filteredFilesNotifier.value = filteredFiles;
+        _isFiltering = false;
+        _initializeStaggeredAnimations();
+      });
     }
   }
 
   static List<File> _filterFiles(Map<String, dynamic> params) {
     final List<File> files = params['files'] as List<File>;
     final String filter = params['filter'] as String;
-
     return files.where((file) {
       final path = file.path.toLowerCase();
       if (filter == 'images') {
@@ -129,10 +171,9 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
       return;
     }
     final result = await OpenFile.open(file.path);
-    if (result.type != ResultType.done) {
+    if (result.type != ResultType.done && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open file')),
-      );
+          const SnackBar(content: Text('Could not open file')));
     }
   }
 
@@ -141,12 +182,19 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
-        title: const Text('Delete File', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Delete File',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'Are you sure you want to delete "$fileName"?',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         actions: [
           TextButton(
@@ -155,37 +203,46 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
       try {
         await file.delete();
         await _loadFiles();
       } catch (e) {
         debugPrint('Error deleting file: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error deleting file')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Error deleting file')));
+        }
       }
     }
   }
 
   Future<void> _deleteSelectedFiles() async {
     if (_selectedFiles.isEmpty) return;
-
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
-        title: const Text('Delete Files', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Delete Files',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: Text(
           'Are you sure you want to delete ${_selectedFiles.length} file${_selectedFiles.length > 1 ? 's' : ''}?',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         actions: [
           TextButton(
@@ -194,29 +251,39 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
       try {
         await Future.wait(_selectedFiles.map((path) => File(path).delete()));
-        setState(() {
-          _selectedFiles.clear();
-          _isMultiSelectMode = false;
-        });
-        await _loadFiles();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${_selectedFiles.length} file${_selectedFiles.length > 1 ? 's' : ''} deleted')),
-        );
+        if (mounted) {
+          setState(() {
+            _selectedFiles.clear();
+            _isMultiSelectMode = false;
+          });
+          await _loadFiles();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${_selectedFiles.length} file${_selectedFiles.length > 1 ? 's' : ''} deleted',
+              ),
+            ),
+          );
+        }
       } catch (e) {
         debugPrint('Error deleting files: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error deleting some files')),
-        );
-        await _loadFiles();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error deleting some files')),
+          );
+          await _loadFiles();
+        }
       }
     }
   }
@@ -224,13 +291,17 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
   Future<void> _renameFile(File file) async {
     final oldName = file.path.split('/').last;
     final controller = TextEditingController(text: oldName);
-
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
-        title: const Text('Rename File', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Rename File',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           decoration: InputDecoration(
@@ -260,9 +331,11 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
                 } catch (e) {
                   Navigator.pop(context);
                   debugPrint('Error renaming file: $e');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Error renaming file')),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error renaming file')),
+                    );
+                  }
                 }
               }
             },
@@ -310,8 +383,12 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
   }
 
   void _setFilter(String value) {
-    _filter = value;
-    _applyFilter();
+    if (_filter != value && mounted) {
+      setState(() {
+        _filter = value;
+      });
+      _applyFilter();
+    }
   }
 
   Widget _buildFilterChip(String label, String value) {
@@ -321,30 +398,89 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
 
     return GestureDetector(
       onTap: () => _setFilter(value),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: isDarkMode
-                      ? [Colors.indigo.shade800, Colors.purple.shade800]
-                      : [Colors.deepPurple, Colors.indigoAccent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isSelected ? null : theme.colorScheme.surfaceContainer,
-          borderRadius: const BorderRadius.all(Radius.circular(20)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+      child: AnimatedScale(
+        scale: isSelected ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: isSelected
+                ? LinearGradient(
+                    colors: isDarkMode
+                        ? [Colors.blue.shade700, Colors.blue.shade900]
+                        : [Colors.blue.shade400, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isSelected
+                ? null
+                : (isDarkMode ? Colors.grey.shade800 : Colors.white),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      height: 200,
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? Colors.indigo.shade900.withOpacity(0.5)
+            : Colors.white.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedScale(
+            scale: _fadeAnimation.value,
+            duration: const Duration(milliseconds: 300),
+            child: Icon(
+              Icons.folder_open,
+              size: 60,
+              color: isDarkMode ? Colors.blue.shade300 : Colors.blue.shade600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Files Found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Convert or combine files to see them here',
+            style: TextStyle(
+              fontSize: 14,
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -360,44 +496,52 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           padding: const EdgeInsets.all(8.0),
           child: Container(
             decoration: BoxDecoration(
-              color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(8),
+              color: isDarkMode
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                  blurRadius: 4,
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               child: Image.asset(
                 'assets/logo1.png',
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 fit: BoxFit.cover,
               ),
             ),
           ),
         ),
         title: Text(
-          _isMultiSelectMode ? '${_selectedFiles.length} Selected' : 'Results Folder',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          _isMultiSelectMode
+              ? '${_selectedFiles.length} Selected'
+              : 'Results Folder',
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            color: Colors.white,
+          ),
         ),
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDarkMode
-                  ? [Colors.indigo.shade900, Colors.purple.shade900]
-                  : [Colors.indigoAccent, Colors.deepPurpleAccent],
+                  ? [Colors.blue.shade700, Colors.blue.shade900]
+                  : [Colors.blue.shade400, Colors.blue.shade600],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
-        centerTitle: false,
-        elevation: 2,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         actions: [
           if (!_isMultiSelectMode)
             IconButton(
@@ -419,223 +563,383 @@ class _ResultsFolderScreenState extends State<ResultsFolderScreen> with SingleTi
           ],
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDarkMode
-                ? [Colors.indigo.shade900, Colors.purple.shade900]
-                : [Colors.indigo.shade50, Colors.purple.shade50],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDarkMode
-                        ? [Colors.indigo.shade800, Colors.purple.shade800]
-                        : [Colors.indigo.shade100, Colors.purple.shade100],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                      blurRadius: 6.0,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.folder_open,
-                      color: isDarkMode ? Colors.white70 : Colors.indigo.shade700,
-                      size: 24.0,
-                    ),
-                    const SizedBox(width: 12.0),
-                    ValueListenableBuilder<List<File>>(
-                      valueListenable: _filteredFilesNotifier,
-                      builder: (context, filteredFiles, child) {
-                        return Text(
-                          'Total Files: ${filteredFiles.length}',
-                          style: TextStyle(
-                            fontSize: 18.0,
-                            fontWeight: FontWeight.bold,
-                            color: isDarkMode ? Colors.white : Colors.indigo.shade900,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDarkMode
+                    ? [Colors.indigo.shade900, Colors.purple.shade900]
+                    : [Colors.deepPurple.shade50, Colors.indigo.shade50],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
-            Expanded(
-              child: ValueListenableBuilder<List<File>>(
-                valueListenable: _filteredFilesNotifier,
-                builder: (context, filteredFiles, child) {
-                  if (filteredFiles.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No files found.',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                      ),
-                    );
-                  }
-                  return FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: ListView.builder(
-                      itemCount: filteredFiles.length,
-                      itemBuilder: (context, index) {
-                        final file = filteredFiles[index];
-                        final fileName = file.path.split('/').last;
-                        final modifiedTime = file.statSync().modified;
-                        final formattedTime = DateFormat('MMM d, yyyy HH:mm').format(modifiedTime);
-                        final isSelected = _selectedFiles.contains(file.path);
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12.0,
+                      horizontal: 16.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? Colors.indigo.shade900.withOpacity(0.85)
+                          : Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(
+                            isDarkMode ? 0.2 : 0.1,
+                          ),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.folder_open,
+                          color: isDarkMode
+                              ? Colors.blue.shade300
+                              : Colors.blue.shade600,
+                          size: 24.0,
+                        ),
+                        const SizedBox(width: 12.0),
+                        ValueListenableBuilder<List<File>>(
+                          valueListenable: _filteredFilesNotifier,
+                          builder: (context, filteredFiles, child) {
+                            return Text(
+                              'Total Files: ${filteredFiles.length}',
+                              style: TextStyle(
+                                fontSize: 18.0,
+                                fontWeight: FontWeight.w600,
+                                color: isDarkMode
+                                    ? Colors.white
+                                    : Colors.indigo.shade900,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ValueListenableBuilder<List<File>>(
+                    valueListenable: _filteredFilesNotifier,
+                    builder: (context, filteredFiles, child) {
+                      if (_isFiltering) {
+                        return Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }
+                      if (filteredFiles.isEmpty && !_isLoading) {
+                        return Center(child: _buildEmptyState());
+                      }
+                      return FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? Colors.indigo.shade900.withOpacity(0.85)
+                                : Colors.white.withOpacity(0.95),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(
+                                  isDarkMode ? 0.2 : 0.1,
+                                ),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ListView.builder(
+                            itemCount: filteredFiles.length,
+                            itemBuilder: (context, index) {
+                              final file = filteredFiles[index];
+                              final fileName = file.path.split('/').last;
+                              final modifiedTime = file.statSync().modified;
+                              final formattedTime = DateFormat(
+                                'MMM d, yyyy HH:mm',
+                              ).format(modifiedTime);
+                              final isSelected =
+                                  _selectedFiles.contains(file.path);
 
-                        return Dismissible(
-                          key: ValueKey(file.path),
-                          background: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                            decoration: const BoxDecoration(
-                              color: Colors.blueAccent,
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
-                            ),
-                            alignment: Alignment.centerLeft,
-                            padding: const EdgeInsets.only(left: 16),
-                            child: const Icon(Icons.edit, color: Colors.white),
-                          ),
-                          secondaryBackground: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              borderRadius: BorderRadius.all(Radius.circular(8)),
-                            ),
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 16),
-                            child: const Icon(Icons.delete, color: Colors.white),
-                          ),
-                          confirmDismiss: _isMultiSelectMode
-                              ? null
-                              : (direction) async {
-                                  if (direction == DismissDirection.startToEnd) {
-                                    _renameFile(file);
-                                    return false;
-                                  } else {
-                                    final confirm = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                              return AnimatedBuilder(
+                                animation: _staggeredAnimations[index],
+                                builder: (context, child) {
+                                  return Transform.translate(
+                                    offset: Offset(
+                                      0,
+                                      50 * (1 - _staggeredAnimations[index].value),
+                                    ),
+                                    child: Opacity(
+                                      opacity: _staggeredAnimations[index].value,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Dismissible(
+                                  key: ValueKey(file.path),
+                                  background: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isDarkMode
+                                            ? [
+                                                Colors.blue.shade700,
+                                                Colors.blue.shade900,
+                                              ]
+                                            : [
+                                                Colors.blue.shade400,
+                                                Colors.blue.shade600,
+                                              ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    alignment: Alignment.centerLeft,
+                                    padding: const EdgeInsets.only(left: 16),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  secondaryBackground: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.red.shade600,
+                                          Colors.red.shade800,
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    alignment: Alignment.centerRight,
+                                    padding: const EdgeInsets.only(right: 16),
+                                    child: const Icon(
+                                      Icons.delete,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  confirmDismiss: _isMultiSelectMode
+                                      ? null
+                                      : (direction) async {
+                                          if (direction ==
+                                              DismissDirection.startToEnd) {
+                                            _renameFile(file);
+                                            return false;
+                                          } else {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                backgroundColor:
+                                                    theme.colorScheme.surfaceContainer,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                                title: const Text(
+                                                  'Delete File',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                content: Text(
+                                                  'Are you sure you want to delete "$fileName"?',
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    child: const Text('Cancel'),
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                  ),
+                                                  TextButton(
+                                                    child: const Text(
+                                                      'Delete',
+                                                      style: TextStyle(
+                                                          color: Colors.red),
+                                                    ),
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true) {
+                                              await file.delete();
+                                              return true;
+                                            }
+                                          }
+                                          return false;
+                                        },
+                                  onDismissed: _isMultiSelectMode
+                                      ? null
+                                      : (direction) => _loadFiles(),
+                                  child: GestureDetector(
+                                    onTap: () => _openFile(file),
+                                    onLongPress: () {
+                                      if (!_isMultiSelectMode) {
+                                        setState(() {
+                                          _isMultiSelectMode = true;
+                                          _selectedFiles.add(file.path);
+                                        });
+                                      }
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: isDarkMode
+                                              ? [
+                                                  Colors.indigo.shade900,
+                                                  Colors.purple.shade900,
+                                                ]
+                                              : [
+                                                  Colors.white,
+                                                  Colors.grey.shade50,
+                                                ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
                                         ),
-                                        title: const Text('Delete File', style: TextStyle(fontWeight: FontWeight.bold)),
-                                        content: Text('Are you sure you want to delete "$fileName"?'),
-                                        actions: [
-                                          TextButton(
-                                            child: const Text('Cancel'),
-                                            onPressed: () => Navigator.pop(context, false),
-                                          ),
-                                          TextButton(
-                                            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                                            onPressed: () => Navigator.pop(context, true),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              isDarkMode ? 0.2 : 0.1,
+                                            ),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 3),
                                           ),
                                         ],
+                                        border: isSelected
+                                            ? Border.all(
+                                                color: Colors.blue.shade600,
+                                                width: 2,
+                                              )
+                                            : null,
                                       ),
-                                    );
-                                    if (confirm == true) {
-                                      await file.delete();
-                                      return true;
-                                    }
-                                  }
-                                  return false;
-                                },
-                          onDismissed: _isMultiSelectMode ? null : (direction) => _loadFiles(),
-                          child: Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                            elevation: 1,
-                            color: isSelected ? theme.colorScheme.primary.withOpacity(0.1) : null,
-                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-                            child: ListTile(
-                              leading: _isMultiSelectMode
-                                  ? Checkbox(
-                                      value: isSelected,
-                                      onChanged: (value) => _toggleSelection(file.path),
-                                      activeColor: Colors.indigoAccent,
-                                    )
-                                  : _isImageFile(file.path)
-                                      ? Image.file(
-                                          file,
-                                          width: 40,
-                                          height: 40,
-                                          fit: BoxFit.cover,
-                                          cacheWidth: 40,
-                                          cacheHeight: 40,
-                                        )
-                                      : const Icon(Icons.insert_drive_file, size: 40),
-                              title: Text(
-                                fileName,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                'Size: ${_formatFileSize(file.lengthSync())} • $formattedTime',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              onTap: () => _openFile(file),
-                              onLongPress: () {
-                                if (!_isMultiSelectMode) {
-                                  setState(() {
-                                    _isMultiSelectMode = true;
-                                    _selectedFiles.add(file.path);
-                                  });
-                                }
-                              },
-                              trailing: _isMultiSelectMode
-                                  ? null
-                                  : PopupMenuButton<String>(
-                                      icon: const Icon(Icons.more_vert),
-                                      onSelected: (value) {
-                                        if (value == 'rename') {
-                                          _renameFile(file);
-                                        } else if (value == 'delete') {
-                                          _deleteFile(file);
-                                        }
-                                      },
-                                      itemBuilder: (context) => const [
-                                        PopupMenuItem(value: 'rename', child: Text('Rename')),
-                                        PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                      ],
+                                      child: ListTile(
+                                        leading: _isMultiSelectMode
+                                            ? Checkbox(
+                                                value: isSelected,
+                                                onChanged: (value) =>
+                                                    _toggleSelection(file.path),
+                                                activeColor: Colors.blue.shade600,
+                                              )
+                                            : _isImageFile(file.path)
+                                                ? Image.file(
+                                                    file,
+                                                    width: 40,
+                                                    height: 40,
+                                                    fit: BoxFit.cover,
+                                                    cacheWidth: 40,
+                                                    cacheHeight: 40,
+                                                    errorBuilder: (context, error,
+                                                            stackTrace) =>
+                                                        const Icon(
+                                                      Icons.broken_image,
+                                                      size: 40,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.picture_as_pdf,
+                                                    color: Colors.blue.shade600,
+                                                    size: 40,
+                                                  ),
+                                        title: Text(
+                                          fileName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          'Size: ${_formatFileSize(file.lengthSync())} • $formattedTime',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        trailing: _isMultiSelectMode
+                                            ? null
+                                            : PopupMenuButton<String>(
+                                                icon: const Icon(
+                                                  Icons.more_vert,
+                                                ),
+                                                onSelected: (value) {
+                                                  if (value == 'rename') {
+                                                    _renameFile(file);
+                                                  } else if (value == 'delete') {
+                                                    _deleteFile(file);
+                                                  }
+                                                },
+                                                itemBuilder: (context) => const [
+                                                  PopupMenuItem(
+                                                    value: 'rename',
+                                                    child: Text('Rename'),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value: 'delete',
+                                                    child: Text('Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                      ),
                                     ),
-                            ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildFilterChip('All', 'all'),
+                      _buildFilterChip('Images', 'images'),
+                      _buildFilterChip('PDFs', 'pdfs'),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildFilterChip('All', 'all'),
-                  _buildFilterChip('Images', 'images'),
-                  _buildFilterChip('PDFs', 'pdfs'),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+          
+        ],
       ),
     );
   }

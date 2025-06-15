@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart'; // For compute
-import 'package:media_scanner/media_scanner.dart'; // Import media_scanner
+import 'package:flutter/foundation.dart';
+import 'package:media_scanner/media_scanner.dart';
 
 class MultipleImageProcessor extends StatefulWidget {
   const MultipleImageProcessor({super.key});
@@ -16,132 +17,52 @@ class MultipleImageProcessor extends StatefulWidget {
   State<MultipleImageProcessor> createState() => _MultipleImageProcessorState();
 }
 
-class _MultipleImageProcessorState extends State<MultipleImageProcessor> {
-  ThemeMode _themeMode = ThemeMode.light;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTheme();
-  }
-
-  Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    final themeString = prefs.getString('themeMode') ?? 'light';
-    if (mounted) {
-      setState(() {
-        _themeMode = themeString == 'dark' ? ThemeMode.dark : ThemeMode.light;
-      });
-    }
-  }
-
-  Future<void> _updateTheme(ThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('themeMode', mode == ThemeMode.dark ? 'dark' : 'light');
-    if (mounted) {
-      setState(() {
-        _themeMode = mode;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-
-    return Scaffold(
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/logo1.png',
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-        title: const Text(
-          'Image Converter',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDarkMode
-                  ? [Colors.indigo.shade900, Colors.purple.shade900]
-                  : [Colors.indigoAccent, Colors.deepPurpleAccent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        centerTitle: false,
-        elevation: 4,
-        shadowColor: Colors.black45,
-      ),
-      body: MultipleImageHomeScreen(
-        themeMode: _themeMode,
-        updateTheme: _updateTheme,
-      ),
-    );
-  }
-}
-
-class MultipleImageHomeScreen extends StatefulWidget {
-  final ThemeMode themeMode;
-  final Function(ThemeMode) updateTheme;
-
-  const MultipleImageHomeScreen({
-    super.key,
-    required this.themeMode,
-    required this.updateTheme,
-  });
-
-  @override
-  State<MultipleImageHomeScreen> createState() => _MultipleImageHomeScreenState();
-}
-
-class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with SingleTickerProviderStateMixin {
+class _MultipleImageProcessorState extends State<MultipleImageProcessor>
+    with SingleTickerProviderStateMixin {
   List<File> _originalImageFiles = [];
   List<File> _processedImageFiles = [];
-  final picker = ImagePicker();
+  final ImagePicker _picker = ImagePicker();
   final List<String> _formats = ['jpg', 'jpeg', 'png', 'bmp', 'gif'];
   int _selectedFormatIndex = 0;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   Map<File, img.Image?> _cachedImages = {};
-  bool _isConvertedToPDF = false; // Track PDF conversion state
+  bool _isConvertedToPDF = false;
+  bool _isProcessing = false;
+  final Set<String> _clickedButtons = {};
+  final Set<String> _primaryButtons = {};
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
-
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+    _assignRandomButtonStyles();
+  }
+
+  void _assignRandomButtonStyles() {
+    final buttons = [
+      'Camera',
+      'Gallery',
+      'Convert',
+      'Resize Images',
+      'Compress Images',
+    ];
+    final random = Random();
+    for (var button in buttons) {
+      if (random.nextBool()) {
+        _primaryButtons.add(button);
+      }
+    }
+    // "Convert to PDF" is always primary
+    _primaryButtons.add('Convert to PDF');
   }
 
   @override
@@ -151,24 +72,49 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
   }
 
   Future<void> _requestPermissions() async {
-    await [
+    final permissions = [
       Permission.storage,
       Permission.photos,
       Permission.camera,
       Permission.manageExternalStorage,
-    ].request();
+    ];
+    for (var permission in permissions) {
+      if (await permission.isDenied) {
+        await permission.request();
+      }
+    }
   }
 
   Future<void> _pickImages(ImageSource source) async {
-    final pickedFiles = await picker.pickMultiImage();
-    if (pickedFiles.isNotEmpty) {
+    if (_isProcessing) return;
+    try {
       setState(() {
-        _originalImageFiles = pickedFiles.map((pickedFile) => File(pickedFile.path)).toList();
-        _processedImageFiles = List.from(_originalImageFiles);
-        _cachedImages.clear();
-        _cachedImages.addAll(Map.fromEntries(_originalImageFiles.map((file) => MapEntry(file, null))));
-        _isConvertedToPDF = false; // Reset PDF state on new selection
+        _isProcessing = true;
       });
+      final pickedFiles = await _picker.pickMultiImage();
+      if (pickedFiles.isNotEmpty && mounted) {
+        setState(() {
+          _originalImageFiles =
+              pickedFiles.map((pickedFile) => File(pickedFile.path)).toList();
+          _processedImageFiles = List.from(_originalImageFiles);
+          _cachedImages = Map.fromEntries(
+            _originalImageFiles.map((file) => MapEntry(file, null)),
+          );
+          _isConvertedToPDF = false;
+          _isProcessing = false;
+        });
+      } else {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error picking images: $e');
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -178,79 +124,138 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
   }
 
   Future<void> _resizeImageDialog() async {
-    if (_originalImageFiles.isEmpty) return;
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
     int? width;
     int? height;
+    final widthController = TextEditingController();
+    final heightController = TextEditingController();
 
     await showDialog(
       context: context,
-      builder: (context) {
-        final widthController = TextEditingController();
-        final heightController = TextEditingController();
-        return AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text("Enter Dimensions", style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(
-              controller: widthController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Width',
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      builder:
+          (context) => AlertDialog(
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              "Resize Images",
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: widthController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Width (px)',
+                    filled: true,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: heightController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Height (px)',
+                    filled: true,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: heightController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Height',
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              TextButton(
+                onPressed: () {
+                  width = int.tryParse(widthController.text);
+                  height = int.tryParse(heightController.text);
+                  if (width != null &&
+                      height != null &&
+                      width! > 0 &&
+                      height! > 0) {
+                    Navigator.pop(context);
+                    _resizeImages(width!, height!);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please enter valid dimensions.'),
+                      ),
+                    );
+                  }
+                },
+                child: const Text("Resize"),
               ),
-            ),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            TextButton(
-              onPressed: () async {
-                width = int.tryParse(widthController.text);
-                height = int.tryParse(heightController.text);
-                if (width != null && height != null) {
-                  Navigator.pop(context);
-                  await _resizeImages(width!, height!);
-                  setState(() => _isConvertedToPDF = false); // Reset PDF state
-                }
-              },
-              child: const Text("Save"),
-            ),
-          ],
-        );
-      },
+            ],
+          ),
     );
   }
 
   Future<void> _resizeImages(int width, int height) async {
-    if (_originalImageFiles.isEmpty) return;
-    final results = await Future.wait(_originalImageFiles.map((file) async {
-      final bytes = await file.readAsBytes();
-      return await compute(_resizeImageIsolate, {'bytes': Uint8List.fromList(bytes), 'width': width, 'height': height});
-    }).take(5));
-    final newFiles = results.whereType<Map<String, dynamic>>().map((result) => File(result['path'] as String)).toList();
-    if (newFiles.isNotEmpty) {
-      setState(() {
-        _processedImageFiles = newFiles;
-        _cachedImages.clear();
-        _cachedImages.addAll(Map.fromEntries(newFiles.map((file) => MapEntry(file, null))));
-      });
-      for (final path in newFiles.map((file) => file.path)) {
-        await MediaScanner.loadMedia(path: path);
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+    });
+    try {
+      final results = await Future.wait(
+        _originalImageFiles
+            .map((file) async {
+              final bytes = await file.readAsBytes();
+              return await compute(_resizeImageIsolate, {
+                'bytes': Uint8List.fromList(bytes),
+                'width': width,
+                'height': height,
+              });
+            })
+            .take(5),
+      );
+      final newFiles =
+          results
+              .whereType<Map<String, dynamic>>()
+              .map((result) => File(result['path'] as String))
+              .toList();
+      if (newFiles.isNotEmpty && mounted) {
+        setState(() {
+          _processedImageFiles = newFiles;
+          _cachedImages = Map.fromEntries(
+            Iterable.generate(
+              newFiles.length,
+              (i) => MapEntry(newFiles[i], results[i]!['image'] as img.Image?),
+            ),
+          );
+          _isConvertedToPDF = false;
+          _isProcessing = false;
+        });
+        for (final path in newFiles.map((file) => file.path)) {
+          await MediaScanner.loadMedia(path: path);
+        }
+        _showSuccess('Resized images saved to Pictures/ImageConverter');
+      } else {
+        _showError('Failed to resize images.');
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resized images saved to Pictures/ImageConverter')));
+    } catch (e) {
+      _showError('Error resizing images: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
@@ -260,49 +265,87 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
     final height = args['height'] as int;
     final original = img.decodeImage(bytes);
     if (original == null) return null;
-    final resized = img.copyResize(original, width: width, height: height);
+    final resized = img.copyResize(
+      original,
+      width: width,
+      height: height,
+      interpolation: img.Interpolation.cubic,
+    );
     final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
     if (!directory.existsSync()) directory.createSync(recursive: true);
-    final newPath = '${directory.path}/resized_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final encodedBytes = img.encodeJpg(resized, quality: 80);
+    final newPath =
+        '${directory.path}/resized_${DateTime.now().millisecondsSinceEpoch}.png';
+    final encodedBytes = img.encodePng(resized, level: 6);
     final file = File(newPath)..writeAsBytesSync(encodedBytes);
     return {'path': newPath, 'image': resized};
   }
 
   Future<void> _convertToFormat() async {
-    if (_originalImageFiles.isEmpty) return;
-    final results = await Future.wait(_originalImageFiles.map((file) async {
-      final bytes = await file.readAsBytes();
-      return await compute(_convertToFormatIsolate, {
-        'bytes': Uint8List.fromList(bytes),
-        'format': _formats[_selectedFormatIndex],
-      });
-    }).take(5));
-    final newFiles = results.whereType<Map<String, dynamic>>().map((result) => File(result['path'] as String)).toList();
-    if (newFiles.isNotEmpty) {
-      setState(() {
-        _processedImageFiles = newFiles;
-        _cachedImages.clear();
-        _cachedImages.addAll(Map.fromEntries(newFiles.map((file) => MapEntry(file, null))));
-        _isConvertedToPDF = false; // Reset PDF state
-      });
-      for (final path in newFiles.map((file) => file.path)) {
-        await MediaScanner.loadMedia(path: path);
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+    });
+    try {
+      final results = await Future.wait(
+        _originalImageFiles
+            .map((file) async {
+              final bytes = await file.readAsBytes();
+              return await compute(_convertToFormatIsolate, {
+                'bytes': Uint8List.fromList(bytes),
+                'format': _formats[_selectedFormatIndex],
+              });
+            })
+            .take(5),
+      );
+      final newFiles =
+          results
+              .whereType<Map<String, dynamic>>()
+              .map((result) => File(result['path'] as String))
+              .toList();
+      if (newFiles.isNotEmpty && mounted) {
+        setState(() {
+          _processedImageFiles = newFiles;
+          _cachedImages = Map.fromEntries(
+            Iterable.generate(
+              newFiles.length,
+              (i) => MapEntry(newFiles[i], results[i]!['image'] as img.Image?),
+            ),
+          );
+          _isConvertedToPDF = false;
+          _isProcessing = false;
+        });
+        for (final path in newFiles.map((file) => file.path)) {
+          await MediaScanner.loadMedia(path: path);
+        }
+        _showSuccess(
+          'Converted to ${_formats[_selectedFormatIndex].toUpperCase()} in Pictures/ImageConverter',
+        );
+      } else {
+        _showError('Failed to convert images.');
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved as ${_formats[_selectedFormatIndex]} in Pictures/ImageConverter')));
+    } catch (e) {
+      _showError('Error converting images: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
-  static Map<String, dynamic>? _convertToFormatIsolate(Map<String, dynamic> args) {
+  static Map<String, dynamic>? _convertToFormatIsolate(
+    Map<String, dynamic> args,
+  ) {
     final bytes = args['bytes'] as Uint8List;
     final format = args['format'] as String;
     final original = img.decodeImage(bytes);
     if (original == null) return null;
-    final resized = img.copyResize(original, width: original.width, height: original.height);
-    final encodedBytes = _encodeImage(resized, format);
+    final encodedBytes = _encodeImage(original, format);
     final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
     if (!directory.existsSync()) directory.createSync(recursive: true);
-    final newPath = '${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}.$format';
+    final newPath =
+        '${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}.$format';
     final file = File(newPath)..writeAsBytesSync(encodedBytes);
     return {'path': newPath, 'image': original};
   }
@@ -311,7 +354,7 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
     switch (format) {
       case 'jpg':
       case 'jpeg':
-        return img.encodeJpg(image, quality: 80);
+        return img.encodeJpg(image, quality: 90);
       case 'png':
         return img.encodePng(image, level: 6);
       case 'bmp':
@@ -319,95 +362,194 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
       case 'gif':
         return img.encodeGif(image);
       default:
-        return img.encodeJpg(image, quality: 80);
+        return img.encodePng(image);
     }
   }
 
   Future<void> _convertToPDF() async {
-    if (_originalImageFiles.isEmpty) return;
-    final results = await Future.wait(_originalImageFiles.map((file) async {
-      final bytes = await file.readAsBytes();
-      return await compute(_convertToPDFIsolate, Uint8List.fromList(bytes));
-    }).take(5));
-    final newFiles = results.whereType<String>().map((path) => File(path)).toList();
-    if (newFiles.isNotEmpty) {
-      setState(() {
-        _processedImageFiles = newFiles;
-        _cachedImages.clear();
-        _isConvertedToPDF = true; // Set PDF state to true
-      });
-      for (final path in newFiles.map((file) => file.path)) {
-        await MediaScanner.loadMedia(path: path);
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+    });
+    try {
+      final results = await Future.wait(
+        _originalImageFiles
+            .map((file) async {
+              final bytes = await file.readAsBytes();
+              return await compute(
+                _convertToPDFIsolate,
+                Uint8List.fromList(bytes),
+              );
+            })
+            .take(5),
+      );
+      final newFiles =
+          results.whereType<String>().map((path) => File(path)).toList();
+      if (newFiles.isNotEmpty && mounted) {
+        setState(() {
+          _processedImageFiles = newFiles;
+          _cachedImages = Map.fromEntries(
+            newFiles.map((file) => MapEntry(file, null)),
+          );
+          _isConvertedToPDF = true;
+          _isProcessing = false;
+        });
+        for (final path in newFiles.map((file) => file.path)) {
+          await MediaScanner.loadMedia(path: path);
+        }
+        _showSuccess('PDFs saved to Documents');
+      } else {
+        _showError('Failed to convert to PDFs.');
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PDFs saved to Documents')));
+    } catch (e) {
+      _showError('Error converting to PDFs: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   static Future<String?> _convertToPDFIsolate(Uint8List bytes) async {
     final pdf = pw.Document();
     final image = pw.MemoryImage(bytes);
-    pdf.addPage(pw.Page(build: (pw.Context context) => pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain))));
+    pdf.addPage(
+      pw.Page(
+        build:
+            (pw.Context context) =>
+                pw.Center(child: pw.Image(image, fit: pw.BoxFit.contain)),
+      ),
+    );
     final directory = Directory('/storage/emulated/0/Documents');
     if (!directory.existsSync()) directory.createSync(recursive: true);
-    final filePath = '${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    final filePath =
+        '${directory.path}/converted_${DateTime.now().millisecondsSinceEpoch}.pdf';
     final file = File(filePath);
     await file.writeAsBytes(await pdf.save());
     return file.path;
   }
 
   Future<void> _compressImageDialog() async {
-    if (_originalImageFiles.isEmpty) return;
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
     double quality = 80;
 
     await showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text("Compress Image", style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text("Adjust quality (lower = smaller file size):", style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            Slider(value: quality, min: 0, max: 100, divisions: 100, label: quality.round().toString(), activeColor: Colors.deepPurpleAccent, onChanged: (value) => setState(() => quality = value)),
-            Text("Quality: ${quality.round()}%", style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _compressImages(quality.round());
-                setState(() => _isConvertedToPDF = false); // Reset PDF state
-              },
-              child: const Text("Compress"),
-            ),
-          ],
-        ),
-      ),
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainer,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text(
+                    "Compress Images",
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "Adjust quality (lower = smaller file size):",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Slider(
+                        value: quality,
+                        min: 10,
+                        max: 100,
+                        divisions: 90,
+                        label: quality.round().toString(),
+                        activeColor: Theme.of(context).colorScheme.primary,
+                        onChanged: (value) => setState(() => quality = value),
+                      ),
+                      Text(
+                        "Quality: ${quality.round()}%",
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _compressImages(quality.round());
+                      },
+                      child: const Text("Compress"),
+                    ),
+                  ],
+                ),
+          ),
     );
   }
 
   Future<void> _compressImages(int quality) async {
-    if (_originalImageFiles.isEmpty) return;
-    final results = await Future.wait(_originalImageFiles.map((file) async {
-      final bytes = await file.readAsBytes();
-      return await compute(_compressImageIsolate, {'bytes': Uint8List.fromList(bytes), 'quality': quality});
-    }).take(5));
-    final newFiles = results.whereType<Map<String, dynamic>>().map((result) => File(result['path'] as String)).toList();
-    if (newFiles.isNotEmpty) {
-      setState(() {
-        _processedImageFiles = newFiles;
-        _cachedImages.clear();
-        _cachedImages.addAll(Map.fromEntries(newFiles.map((file) => MapEntry(file, null))));
-      });
-      for (final path in newFiles.map((file) => file.path)) {
-        await MediaScanner.loadMedia(path: path);
+    if (_originalImageFiles.isEmpty || _isProcessing) return;
+    setState(() {
+      _isProcessing = true;
+    });
+    try {
+      final results = await Future.wait(
+        _originalImageFiles
+            .map((file) async {
+              final bytes = await file.readAsBytes();
+              return await compute(_compressImageIsolate, {
+                'bytes': Uint8List.fromList(bytes),
+                'quality': quality,
+              });
+            })
+            .take(5),
+      );
+      final newFiles =
+          results
+              .whereType<Map<String, dynamic>>()
+              .map((result) => File(result['path'] as String))
+              .toList();
+      if (newFiles.isNotEmpty && mounted) {
+        setState(() {
+          _processedImageFiles = newFiles;
+          _cachedImages = Map.fromEntries(
+            Iterable.generate(
+              newFiles.length,
+              (i) => MapEntry(newFiles[i], results[i]!['image'] as img.Image?),
+            ),
+          );
+          _isConvertedToPDF = false;
+          _isProcessing = false;
+        });
+        for (final path in newFiles.map((file) => file.path)) {
+          await MediaScanner.loadMedia(path: path);
+        }
+        _showSuccess('Compressed images saved to Pictures/ImageConverter');
+      } else {
+        _showError('Failed to compress images.');
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Compressed images saved to Pictures/ImageConverter')));
+    } catch (e) {
+      _showError('Error compressing images: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
-  static Map<String, dynamic>? _compressImageIsolate(Map<String, dynamic> args) {
+  static Map<String, dynamic>? _compressImageIsolate(
+    Map<String, dynamic> args,
+  ) {
     final bytes = args['bytes'] as Uint8List;
     final quality = args['quality'] as int;
     final original = img.decodeImage(bytes);
@@ -415,195 +557,563 @@ class _MultipleImageHomeScreenState extends State<MultipleImageHomeScreen> with 
     final compressed = img.encodeJpg(original, quality: quality);
     final directory = Directory('/storage/emulated/0/Pictures/ImageConverter');
     if (!directory.existsSync()) directory.createSync(recursive: true);
-    final newPath = '${directory.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final newPath =
+        '${directory.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final file = File(newPath)..writeAsBytesSync(compressed);
     return {'path': newPath, 'image': original};
   }
 
-  Widget _customButton(IconData icon, String label, VoidCallback onPressed, {int delay = 0}) {
+  void _showSuccess(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+ Widget _customButton(
+    IconData icon,
+    String label,
+    VoidCallback onPressed, {
+    bool isPrimary = false,
+    bool isEnabled = true,
+  }) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: isDarkMode ? [Colors.indigo.shade800, Colors.purple.shade800] : [Colors.deepPurpleAccent, Colors.indigoAccent], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2), blurRadius: 10, offset: const Offset(0, 4))],
+    // Make button primary if clicked or in _primaryButtons
+    final effectiveIsPrimary =
+        isPrimary ||
+        _clickedButtons.contains(label) ||
+        _primaryButtons.contains(label);
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: isEnabled,
+      child: GestureDetector(
+        onTap:
+            isEnabled
+                ? () {
+                  setState(() {
+                    _clickedButtons.add(label);
+                  });
+                  onPressed();
+                }
+                : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors:
+                  isEnabled
+                      ? effectiveIsPrimary
+                          ? isDarkMode
+                              ? [Colors.blue.shade700, Colors.blue.shade900]
+                              : [Colors.blue.shade400, Colors.blue.shade600]
+                          : isDarkMode
+                          ? [Colors.indigo.shade800, Colors.purple.shade800]
+                          : [Colors.deepPurple.shade400, Colors.indigo.shade400]
+                      : [Colors.grey.shade200, Colors.grey.shade300],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow:
+                isEnabled
+                    ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(
+                          isDarkMode ? 0.3 : 0.15,
+                        ),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                    : [],
+            border: Border.all(
+              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isEnabled ? Colors.white : Colors.grey.shade600,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isEnabled ? Colors.white : Colors.grey.shade600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: Colors.white, size: 20),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-        ]),
       ),
     );
   }
-
   Widget _formatChip(String format, bool isSelected) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFormatIndex = _formats.indexOf(format)),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: isSelected ? LinearGradient(colors: isDarkMode ? [Colors.indigo.shade800, Colors.purple.shade800] : [Colors.deepPurple, Colors.indigoAccent], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
-          color: isSelected ? null : theme.colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2), blurRadius: 5, offset: const Offset(0, 2))] : null,
+    return Semantics(
+      selected: isSelected,
+      label: 'Format $format',
+      enabled: !_isProcessing && _originalImageFiles.isNotEmpty,
+      child: GestureDetector(
+        onTap:
+            _isProcessing || _originalImageFiles.isEmpty
+                ? null
+                : () {
+                  if (mounted) {
+                    setState(
+                      () => _selectedFormatIndex = _formats.indexOf(format),
+                    );
+                  }
+                },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            gradient:
+                isSelected
+                    ? LinearGradient(
+                      colors:
+                          isDarkMode
+                              ? [Colors.blue.shade700, Colors.blue.shade900]
+                              : [Colors.blue.shade400, Colors.blue.shade600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                    : null,
+            color:
+                isSelected
+                    ? null
+                    : isDarkMode
+                    ? Colors.indigo.shade800
+                    : Colors.deepPurple.shade400,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow:
+                isSelected
+                    ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                    : [],
+          ),
+          child: Text(
+            format.toUpperCase(),
+            style: TextStyle(
+              color:
+                  isSelected
+                      ? Colors.white
+                      : isDarkMode
+                      ? Colors.white70
+                      : Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
-        child: Text(format.toUpperCase(), style: TextStyle(color: isSelected ? Colors.white : theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 12)),
       ),
     );
   }
 
   String _getImageResolution(File? file) {
-    if (file == null) return 'N/A';
-    if (_cachedImages[file] == null) {
+    if (file == null || _isConvertedToPDF) return 'N/A';
+    if (_cachedImages[file] == null && file.existsSync()) {
       final bytes = file.readAsBytesSync();
       _cachedImages[file] = img.decodeImage(bytes);
     }
-    return _cachedImages[file] != null ? '${_cachedImages[file]!.width}x${_cachedImages[file]!.height} px' : 'N/A';
+    return _cachedImages[file] != null
+        ? '${_cachedImages[file]!.width}x${_cachedImages[file]!.height} px'
+        : 'N/A';
   }
 
   String _getFileSize(File? file) {
-    if (file == null) return 'N/A';
-    return '${(file.lengthSync() / 1024).toStringAsFixed(1)} KB';
+    if (file == null || !file.existsSync()) return 'N/A';
+    final sizeInKB = file.lengthSync() / 1024;
+    return sizeInKB < 1024
+        ? '${sizeInKB.toStringAsFixed(1)} KB'
+        : '${(sizeInKB / 1024).toStringAsFixed(1)} MB';
   }
 
-  Widget _buildImagePreview({required File? file, required String label, required bool isPDF}) {
+  Widget _buildImagePreview({
+    required File? file,
+    required String label,
+    required bool isPDF,
+  }) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    return Column(
-      children: [
-        Container(
-          width: 150,
-          height: 200,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: isDarkMode ? [Colors.grey.shade900, Colors.black54] : [Colors.white10, Colors.black12], begin: Alignment.topLeft, end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2), blurRadius: 10, offset: const Offset(0, 4))],
+    return Semantics(
+      label: '$label image preview',
+      child: Column(
+        children: [
+          Container(
+            width: 150,
+            height: 180,
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.indigo.shade900 : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child:
+                  file != null && file.existsSync()
+                      ? isPDF
+                          ? const Center(
+                            child: Icon(
+                              Icons.picture_as_pdf,
+                              size: 40,
+                              color: Colors.grey,
+                            ),
+                          )
+                          : Image.file(
+                            file,
+                            fit: BoxFit.contain,
+                            height: 180,
+                            cacheHeight: 360,
+                            errorBuilder:
+                                (context, error, stackTrace) => const Center(
+                                  child: Text(
+                                    'Error loading image',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                          )
+                      : const Center(
+                        child: Text(
+                          'No Image',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ),
+            ),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: file != null
-                ? (isPDF
-                    ? Container(alignment: Alignment.center, child: const Icon(Icons.picture_as_pdf, size: 50, color: Colors.grey))
-                    : Image.file(file, fit: BoxFit.cover, cacheHeight: 200))
-                : Container(alignment: Alignment.center, child: const Text("No Image Selected", textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
-        const SizedBox(height: 4),
-        Text(_getImageResolution(file), style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14)),
-        Text(_getFileSize(file), style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14)),
-      ],
+          Text(
+            _getImageResolution(file),
+            style: TextStyle(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            _getFileSize(file),
+            style: TextStyle(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isImagesSelected = _originalImageFiles.isNotEmpty;
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    return SafeArea(
-      child: SingleChildScrollView(
-        child: Container(
-          constraints: BoxConstraints(minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - kToolbarHeight),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: isDarkMode
-                  ? [Colors.indigo.shade900, Colors.purple.shade900]
-                  : [Colors.indigoAccent, Colors.purpleAccent],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+    final isImagesSelected = _originalImageFiles.isNotEmpty;
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color:
+                  isDarkMode
+                      ? Colors.black.withOpacity(0.4)
+                      : Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                'assets/logo1.png',
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
+        ),
+        title: const Text(
+          'Batch Image Converter',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            color: Colors.white,
+          ),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors:
+                  isDarkMode
+                      ? [Colors.blue.shade800, Colors.blue.shade900]
+                      : [Colors.blue.shade400, Colors.blue.shade600],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+      ),
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors:
+                    isDarkMode
+                        ? [Colors.indigo.shade900, Colors.purple.shade900]
+                        : [Colors.deepPurple.shade50, Colors.indigo.shade50],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isDarkMode
-                            ? [theme.colorScheme.surfaceContainerHighest.withOpacity(0.7), theme.colorScheme.surfaceContainerLow.withOpacity(0.7)]
-                            : [theme.colorScheme.surfaceContainerHighest.withOpacity(0.9), theme.colorScheme.surfaceContainerLow.withOpacity(0.9)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color:
+                          isDarkMode
+                              ? Colors.indigo.shade900.withOpacity(0.85)
+                              : Colors.white.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                          blurRadius: 15,
+                          color: Colors.black.withOpacity(
+                            isDarkMode ? 0.2 : 0.1,
+                          ),
+                          blurRadius: 12,
                           spreadRadius: 2,
-                          offset: const Offset(0, 5),
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (!isImagesSelected)
                           Container(
-                            height: 200,
+                            height: 180,
                             alignment: Alignment.center,
-                            child: const Text("No Images Selected", textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              "Select Images to Begin",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                           )
                         else
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              Expanded(child: _buildImagePreview(file: _originalImageFiles.isNotEmpty ? _originalImageFiles[0] : null, label: "Original", isPDF: false)),
-                              const SizedBox(width: 16),
-                              Expanded(child: _buildImagePreview(file: _processedImageFiles.isNotEmpty ? _processedImageFiles[0] : null, label: "Converted", isPDF: _isConvertedToPDF)),
+                              Expanded(
+                                child: _buildImagePreview(
+                                  file:
+                                      _originalImageFiles.isNotEmpty
+                                          ? _originalImageFiles[0]
+                                          : null,
+                                  label: "Original",
+                                  isPDF: false,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildImagePreview(
+                                  file:
+                                      _processedImageFiles.isNotEmpty
+                                          ? _processedImageFiles[0]
+                                          : null,
+                                  label: "Converted",
+                                  isPDF: _isConvertedToPDF,
+                                ),
+                              ),
                             ],
                           ),
-                        const SizedBox(height: 24),
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                          Expanded(child: _customButton(Icons.camera_alt, "Camera", () => _pickImages(ImageSource.camera))),
-                          const SizedBox(width: 16),
-                          Expanded(child: _customButton(Icons.photo, "Gallery", () => _pickImages(ImageSource.gallery))),
-                        ]),
-                        const SizedBox(height: 16),
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          Expanded(child: _customButton(Icons.swap_horiz, "Change", _convertToFormat)),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: SizedBox(
-                              height: 40,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: _formats.length,
-                                itemBuilder: (context, index) => _formatChip(_formats[index], index == _selectedFormatIndex),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Expanded(
+                              child: _customButton(
+                                Icons.camera_alt,
+                                "Camera",
+                                () => _pickImages(ImageSource.camera),
+                                isEnabled: !_isProcessing,
                               ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _customButton(
+                                Icons.photo,
+                                "Gallery",
+                                () => _pickImages(ImageSource.gallery),
+                                isEnabled: !_isProcessing,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          "Convert Format",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
                           ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _customButton(Icons.picture_as_pdf, "Convert to PDF", _convertToPDF),
-                        const SizedBox(height: 16),
-                        _customButton(Icons.crop, "Resize Image", _resizeImageDialog),
-                        const SizedBox(height: 16),
-                        _customButton(Icons.compress, "Compress Image", _compressImageDialog),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _customButton(
+                                Icons.swap_horiz,
+                                "Convert",
+                                _convertToFormat,
+                                isEnabled: !_isProcessing && isImagesSelected,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 36,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _formats.length,
+                                  itemBuilder:
+                                      (context, index) => _formatChip(
+                                        _formats[index],
+                                        index == _selectedFormatIndex,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _customButton(
+                          Icons.picture_as_pdf,
+                          "Convert to PDF",
+                          _convertToPDF,
+                          isPrimary: true,
+                          isEnabled: !_isProcessing && isImagesSelected,
+                        ),
+                        const SizedBox(height: 12),
+                        _customButton(
+                          Icons.crop,
+                          "Resize Images",
+                          _resizeImageDialog,
+                          isEnabled: !_isProcessing && isImagesSelected,
+                        ),
+                        const SizedBox(height: 12),
+                        _customButton(
+                          Icons.compress,
+                          "Compress Images",
+                          _compressImageDialog,
+                          isEnabled: !_isProcessing && isImagesSelected,
+                        ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          if (_isProcessing)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      "Processing...",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
-}//original
+}
