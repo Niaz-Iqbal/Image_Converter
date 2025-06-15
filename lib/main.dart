@@ -829,9 +829,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String _getImageResolution(File? file, {bool isOriginal = false}) {
-    if (file == null || _isPDF) return 'N/A';
+    if (file == null || _isPDF) return '--';
     if (isOriginal) {
-      return _originalResolution ?? 'N/A';
+      return _originalResolution ?? '--';
     }
     final cachedImage = _convertedCachedImage;
     if (cachedImage == null && file.existsSync()) {
@@ -844,11 +844,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
     return cachedImage != null
         ? '${cachedImage.width}x${cachedImage.height} px'
-        : 'N/A';
+        : '--';
   }
 
   String _getFileSize(File? file) {
-    if (file == null || !file.existsSync()) return 'N/A';
+    if (file == null || !file.existsSync()) return '--';
     final sizeInKB = file.lengthSync() / 1024;
     return sizeInKB < 1024
         ? '${sizeInKB.toStringAsFixed(1)} KB'
