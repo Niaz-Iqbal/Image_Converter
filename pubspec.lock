@@ -829,6 +829,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  unity_ads_plugin:
+    dependency: "direct main"
+    description:
+      name: unity_ads_plugin
+      sha256: d4de05bf70a9b46e0e2dfe06f1ac2612a9373200bc942a1a12c2278efcc33f83
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.25"
   vector_math:
     dependency: transitive
     description:

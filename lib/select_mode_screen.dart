@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:unity_ads_plugin/unity_ads_plugin.dart';
 import 'multiple_image_processor.dart';
 import 'results_folder_screen.dart';
 import 'main.dart';
@@ -22,6 +23,7 @@ class _SelectModeScreenState extends State<SelectModeScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   DateTime? _lastBackPressTime; // For double-tap-to-exit
+  DateTime? _lastInterstitialTime; // For ad cooldown
 
   @override
   void initState() {
@@ -40,6 +42,12 @@ class _SelectModeScreenState extends State<SelectModeScreen>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  bool _canShowInterstitial() {
+    const minInterval = Duration(minutes: 1);
+    if (_lastInterstitialTime == null) return true;
+    return DateTime.now().difference(_lastInterstitialTime!) > minInterval;
   }
 
   Future<bool> _onWillPop() async {
@@ -70,6 +78,10 @@ class _SelectModeScreenState extends State<SelectModeScreen>
     setState(() {
       _isNavigating = true;
     });
+    if (_canShowInterstitial()) {
+      AdManager.showInterstitialAd();
+      _lastInterstitialTime = DateTime.now();
+    }
     await Navigator.push(
       context,
       PageRouteBuilder(
@@ -212,7 +224,7 @@ class _SelectModeScreenState extends State<SelectModeScreen>
             ),
           ),
           title: const Text(
-            'Image Converter',
+            'Pixellete',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 20,
@@ -264,79 +276,105 @@ class _SelectModeScreenState extends State<SelectModeScreen>
                   builder: (context, constraints) {
                     final isWide = constraints.maxWidth > 600;
                     return Center(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 24,
-                        ),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: isWide ? 600 : double.infinity,
-                          ),
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildAnimatedButton(
-                                  icon: Icons.photo_camera,
-                                  title: 'Single Image',
-                                  subtitle:
-                                      'Convert, resize, format, or create PDF',
-                                  onPressed:
-                                      () => _navigateTo(
-                                        HomeScreen(
-                                          onThemeChanged: widget.onThemeChanged,
-                                        ),
-                                      ),
-                                  delay: 0,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 24,
+                              ),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: isWide ? 600 : double.infinity,
                                 ),
-                                _buildAnimatedButton(
-                                  icon: Icons.photo_library,
-                                  title: 'Multiple Images',
-                                  subtitle:
-                                      'Batch convert, resize, or create PDFs',
-                                  onPressed:
-                                      () => _navigateTo(
-                                        const MultipleImageProcessor(),
+                                child: FadeTransition(
+                                  opacity: _fadeAnimation,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      _buildAnimatedButton(
+                                        icon: Icons.photo_camera,
+                                        title: 'Single Image',
+                                        subtitle:
+                                            'Convert, resize, format, or create PDF',
+                                        onPressed:
+                                            () => _navigateTo(
+                                              HomeScreen(
+                                                onThemeChanged:
+                                                    widget.onThemeChanged,
+                                              ),
+                                            ),
+                                        delay: 0,
                                       ),
-                                  delay: 100,
-                                ),
-                                _buildAnimatedButton(
-                                  icon: Icons.edit,
-                                  title: 'Edit Image',
-                                  subtitle:
-                                      'Adjust brightness, rotate, apply filters',
-                                  onPressed:
-                                      () => _navigateTo(
-                                        const ImageEditorScreen(),
+                                      _buildAnimatedButton(
+                                        icon: Icons.photo_library,
+                                        title: 'Multiple Images',
+                                        subtitle:
+                                            'Batch convert, resize, or create PDFs',
+                                        onPressed:
+                                            () => _navigateTo(
+                                              const MultipleImageProcessor(),
+                                            ),
+                                        delay: 100,
                                       ),
-                                  delay: 200,
-                                ),
-                                _buildAnimatedButton(
-                                  icon: Icons.merge_type,
-                                  title: 'Combine PDFs',
-                                  subtitle: 'Merge multiple PDFs into one',
-                                  onPressed:
-                                      () => _navigateTo(
-                                        const CombinePdfsScreen(),
+                                      _buildAnimatedButton(
+                                        icon: Icons.edit,
+                                        title: 'Edit Image',
+                                        subtitle:
+                                            'Adjust brightness, rotate, apply filters',
+                                        onPressed:
+                                            () => _navigateTo(
+                                              const ImageEditorScreen(),
+                                            ),
+                                        delay: 200,
                                       ),
-                                  delay: 300,
-                                ),
-                                _buildAnimatedButton(
-                                  icon: Icons.folder_open,
-                                  title: 'Results Folder',
-                                  subtitle: 'View and manage converted files',
-                                  onPressed:
-                                      () => _navigateTo(
-                                        const ResultsFolderScreen(),
+                                      _buildAnimatedButton(
+                                        icon: Icons.merge_type,
+                                        title: 'Combine PDFs',
+                                        subtitle:
+                                            'Merge multiple PDFs into one',
+                                        onPressed:
+                                            () => _navigateTo(
+                                              const CombinePdfsScreen(),
+                                            ),
+                                        delay: 300,
                                       ),
-                                  delay: 400,
+                                      _buildAnimatedButton(
+                                        icon: Icons.folder_open,
+                                        title: 'Results Folder',
+                                        subtitle:
+                                            'View and manage converted files',
+                                        onPressed:
+                                            () => _navigateTo(
+                                              const ResultsFolderScreen(),
+                                            ),
+                                        delay: 400,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
+                          UnityBannerAd(
+                            placementId: AdManager.bannerAdPlacementId,
+                            onLoad:
+                                (placementId) =>
+                                    print('Banner loaded: $placementId'),
+                            onClick:
+                                (placementId) =>
+                                    print('Banner clicked: $placementId'),
+                            onShown:
+                                (placementId) =>
+                                    print('Banner shown: $placementId'),
+                            onFailed: (placementId, error, message) {
+                              print(
+                                'Banner Ad $placementId failed: $error $message',
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     );
                   },

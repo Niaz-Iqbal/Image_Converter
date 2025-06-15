@@ -27,7 +27,7 @@ dependencies:
   http: ^1.2.0
   syncfusion_flutter_pdf: ^29.2.5
   cupertino_icons: ^1.0.8
-  liquid_progress_indicator: ^2.0.1
+  unity_ads_plugin: ^0.3.25
 
 
 dev_dependencies:

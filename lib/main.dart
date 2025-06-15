@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -9,10 +8,123 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_scanner/media_scanner.dart';
-import 'select_mode_screen.dart'; // Added import for SelectModeScreen
+import 'package:unity_ads_plugin/unity_ads_plugin.dart';
+import 'select_mode_screen.dart';
+import 'start_screen.dart';
 
 void main() {
   runApp(const ImageConverterApp());
+}
+
+class AdManager {
+  static String get gameId {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return '5877534';
+    }
+    return '';
+  }
+
+  static String get bannerAdPlacementId {
+    return 'Banner_Android';
+  }
+
+  static String get interstitialVideoAdPlacementId {
+    return 'Interstitial_Android';
+  }
+
+  static String get rewardedVideoAdPlacementId {
+    return 'Rewarded_Android';
+  }
+
+  static bool _isInitialized = false;
+  static Map<String, bool> _placements = {
+    interstitialVideoAdPlacementId: false,
+    rewardedVideoAdPlacementId: false,
+  };
+
+  static Future<void> initAds() async {
+    if (_isInitialized) return;
+    await UnityAds.init(
+      gameId: gameId,
+      testMode: true,
+      onComplete: () {
+        print('Unity Ads Initialization Complete');
+        _isInitialized = true;
+        _loadAds();
+      },
+      onFailed: (error, message) {
+        print('Unity Ads Initialization Failed: $error $message');
+      },
+    );
+  }
+
+  static void _loadAds() {
+    for (var placementId in _placements.keys) {
+      _loadAd(placementId);
+    }
+  }
+
+  static void _loadAd(String placementId) {
+    UnityAds.load(
+      placementId: placementId,
+      onComplete: (placementId) {
+        print('Load Complete $placementId');
+        _placements[placementId] = true;
+      },
+      onFailed: (placementId, error, message) {
+        print('Load Failed $placementId: $error $message');
+        Future.delayed(Duration(seconds: 5), () => _loadAd(placementId));
+      },
+    );
+  }
+
+  static void showInterstitialAd() {
+    final placementId = interstitialVideoAdPlacementId; // Removed 'const'
+    if (_placements[placementId] == true) {
+      _placements[placementId] = false;
+      UnityAds.showVideoAd(
+        placementId: placementId,
+        onComplete: (placementId) {
+          print('Interstitial Ad $placementId completed');
+          _loadAd(placementId);
+        },
+        onFailed: (placementId, error, message) {
+          print('Interstitial Ad $placementId failed: $error $message');
+          _loadAd(placementId);
+        },
+        onStart: (placementId) => print('Interstitial Ad $placementId started'),
+        onClick: (placementId) => print('Interstitial Ad $placementId clicked'),
+        onSkipped: (placementId) {
+          print('Interstitial Ad $placementId skipped');
+          _loadAd(placementId);
+        },
+      );
+    }
+  }
+
+  static void showRewardedAd() {
+    final placementId = rewardedVideoAdPlacementId; // Removed 'const'
+    if (_placements[placementId] == true) {
+      _placements[placementId] = false;
+      UnityAds.showVideoAd(
+        placementId: placementId,
+        onComplete: (placementId) {
+          print('Rewarded Ad $placementId completed');
+          _loadAd(placementId);
+        },
+        onFailed: (placementId, error, message) {
+          print('Rewarded Ad $placementId failed: $error $message');
+          _loadAd(placementId);
+        },
+        onStart: (placementId) => print('Rewarded Ad $placementId started'),
+        onClick: (placementId) => print('Rewarded Ad $placementId clicked'),
+        onSkipped: (placementId) {
+          print('Rewarded Ad $placementId skipped');
+          _loadAd(placementId);
+        },
+      );
+    }
+  }
 }
 
 class ImageConverterApp extends StatefulWidget {
@@ -29,6 +141,7 @@ class _ImageConverterAppState extends State<ImageConverterApp> {
   void initState() {
     super.initState();
     _loadTheme();
+    AdManager.initAds(); // Initialize Unity Ads globally
   }
 
   Future<void> _loadTheme() async {
@@ -72,10 +185,7 @@ class _ImageConverterAppState extends State<ImageConverterApp> {
         scaffoldBackgroundColor: Colors.grey[900],
       ),
       themeMode: _themeMode,
-      home: SelectModeScreen(
-        onThemeChanged: _updateTheme,
-      ), // Changed to SelectModeScreen
-    );
+      home: StartScreen(onThemeChanged: _updateTheme),    );
   }
 }
 
@@ -101,7 +211,8 @@ class _HomeScreenState extends State<HomeScreen>
   img.Image? _cachedImage;
   img.Image? _convertedCachedImage;
   String? _originalResolution;
-  bool _isProcessing = false; // Track processing state
+  bool _isProcessing = false;
+  DateTime? _lastInterstitialTime;
 
   @override
   void initState() {
@@ -174,6 +285,12 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     }
+  }
+
+  bool _canShowInterstitial() {
+    const minInterval = Duration(minutes: 1);
+    if (_lastInterstitialTime == null) return true;
+    return DateTime.now().difference(_lastInterstitialTime!) > minInterval;
   }
 
   String _getImageExtension(File file) {
@@ -286,6 +403,12 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result['path'] as String);
         _showSuccess('Resized image saved to Pictures/ImageConverter');
+        if (_canShowInterstitial()) {
+          AdManager.showInterstitialAd();
+          _lastInterstitialTime = DateTime.now();
+        } else {
+          AdManager.showRewardedAd();
+        }
       } else {
         _showError('Failed to resize image.');
       }
@@ -344,6 +467,12 @@ class _HomeScreenState extends State<HomeScreen>
         _showSuccess(
           'Converted to ${_formats[_selectedFormatIndex].toUpperCase()}',
         );
+        if (_canShowInterstitial()) {
+          AdManager.showInterstitialAd();
+          _lastInterstitialTime = DateTime.now();
+        } else {
+          AdManager.showRewardedAd();
+        }
       } else {
         _showError('Failed to convert image.');
       }
@@ -411,6 +540,12 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result as String);
         _showSuccess('PDF saved to Documents');
+        if (_canShowInterstitial()) {
+          AdManager.showInterstitialAd();
+          _lastInterstitialTime = DateTime.now();
+        } else {
+          AdManager.showRewardedAd();
+        }
       } else {
         _showError('Failed to convert to PDF.');
       }
@@ -525,6 +660,12 @@ class _HomeScreenState extends State<HomeScreen>
         });
         await MediaScanner.loadMedia(path: result['path'] as String);
         _showSuccess('Compressed image saved to Pictures/ImageConverter');
+        if (_canShowInterstitial()) {
+          AdManager.showInterstitialAd();
+          _lastInterstitialTime = DateTime.now();
+        } else {
+          AdManager.showRewardedAd();
+        }
       } else {
         _showError('Failed to compress image.');
       }
@@ -886,7 +1027,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         title: const Text(
-          'Image Converter',
+          'Pixelette',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 20,
@@ -927,155 +1068,164 @@ class _HomeScreenState extends State<HomeScreen>
                   horizontal: 16,
                   vertical: 8,
                 ),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color:
-                                  isDarkMode
-                                      ? Colors.grey.shade900.withOpacity(0.85)
-                                      : Colors.white.withOpacity(0.95),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(
-                                    isDarkMode ? 0.2 : 0.1,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color:
+                                isDarkMode
+                                    ? Colors.grey.shade900.withOpacity(0.85)
+                                    : Colors.white.withOpacity(0.95),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(
+                                  isDarkMode ? 0.2 : 0.1,
+                                ),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildImagePreview(
+                                      file: _originalImageFile,
+                                      label: "Original",
+                                      isPDF: false,
+                                      isOriginal: true,
+                                    ),
                                   ),
-                                  blurRadius: 12,
-                                  spreadRadius: 2,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildImagePreview(
-                                        file: _originalImageFile,
-                                        label: "Original",
-                                        isPDF: false,
-                                        isOriginal: true,
-                                      ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildImagePreview(
+                                      file: _imageFile,
+                                      label: "Converted",
+                                      isPDF: _isPDF,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildImagePreview(
-                                        file: _imageFile,
-                                        label: "Converted",
-                                        isPDF: _isPDF,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    Expanded(
-                                      child: _customButton(
-                                        Icons.camera_alt,
-                                        "Camera",
-                                        () => _pickImage(ImageSource.camera),
-                                        isEnabled: !_isProcessing,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _customButton(
-                                        Icons.image,
-                                        "Gallery",
-                                        () => _pickImage(ImageSource.gallery),
-                                        isEnabled: !_isProcessing,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-                                Text(
-                                  "Convert Format",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.colorScheme.onSurface,
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  Expanded(
+                                    child: _customButton(
+                                      Icons.camera_alt,
+                                      "Camera",
+                                      () => _pickImage(ImageSource.camera),
+                                      isEnabled: !_isProcessing,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _customButton(
+                                      Icons.image,
+                                      "Gallery",
+                                      () => _pickImage(ImageSource.gallery),
+                                      isEnabled: !_isProcessing,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                "Convert Format",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
                                 ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _customButton(
-                                        Icons.swap_horiz,
-                                        "Convert",
-                                        _convertToFormat,
-                                        isEnabled:
-                                            !_isProcessing &&
-                                            _imageFile != null,
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _customButton(
+                                      Icons.swap_horiz,
+                                      "Convert",
+                                      _convertToFormat,
+                                      isEnabled:
+                                          !_isProcessing && _imageFile != null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        itemCount: _formats.length,
+                                        itemBuilder:
+                                            (context, index) => _formatChip(
+                                              _formats[index],
+                                              index == _selectedFormatIndex,
+                                            ),
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: SizedBox(
-                                        height: 36,
-                                        child: ListView.builder(
-                                          scrollDirection: Axis.horizontal,
-                                          itemCount: _formats.length,
-                                          itemBuilder:
-                                              (context, index) => _formatChip(
-                                                _formats[index],
-                                                index == _selectedFormatIndex,
-                                              ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 20),
-                                Center(
-                                  child: _customButton(
-                                    Icons.picture_as_pdf,
-                                    "Convert to PDF",
-                                    _convertToPDF,
-                                    isPrimary: true,
-                                    isEnabled:
-                                        !_isProcessing && _imageFile != null,
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Center(
+                                child: _customButton(
+                                  Icons.picture_as_pdf,
+                                  "Convert to PDF",
+                                  _convertToPDF,
+                                  isPrimary: true,
+                                  isEnabled:
+                                      !_isProcessing && _imageFile != null,
                                 ),
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: _customButton(
-                                    Icons.crop,
-                                    "Resize Image",
-                                    _resizeImageDialog,
-                                    isEnabled:
-                                        !_isProcessing && _imageFile != null,
-                                  ),
+                              ),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: _customButton(
+                                  Icons.crop,
+                                  "Resize Image",
+                                  _resizeImageDialog,
+                                  isEnabled:
+                                      !_isProcessing && _imageFile != null,
                                 ),
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: _customButton(
-                                    Icons.compress,
-                                    "Compress Image",
-                                    _compressImageDialog,
-                                    isEnabled:
-                                        !_isProcessing && _imageFile != null,
-                                  ),
+                              ),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: _customButton(
+                                  Icons.compress,
+                                  "Compress Image",
+                                  _compressImageDialog,
+                                  isEnabled:
+                                      !_isProcessing && _imageFile != null,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    UnityBannerAd(
+                      placementId: AdManager.bannerAdPlacementId,
+                      onLoad:
+                          (placementId) => print('Banner loaded: $placementId'),
+                      onClick:
+                          (placementId) =>
+                              print('Banner clicked: $placementId'),
+                      onShown:
+                          (placementId) => print('Banner shown: $placementId'),
+                      onFailed: (placementId, error, message) {
+                        print('Banner Ad $placementId failed: $error $message');
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
